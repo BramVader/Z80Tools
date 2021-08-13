@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\CPC464 ROMS\LOWER.ROM" Link="CPC464 ROMS\LOWER.ROM" />
+    <EmbeddedResource Include="..\CPC464 ROMS\UPPER.ROM" Link="CPC464 ROMS\UPPER.ROM" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Emulator\Emulator.csproj" />
+    <ProjectReference Include="..\Z80Core\Z80Core.csproj" />
+  </ItemGroup>
+
+</Project>

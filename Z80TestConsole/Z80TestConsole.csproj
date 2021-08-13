@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\CPC464 ROMS\LOWER.ROM" Link="CPC464 ROMS\LOWER.ROM" />
+    <None Include="..\CPC464 ROMS\UPPER.ROM" Link="CPC464 ROMS\UPPER.ROM" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Z80Core\Z80Core.csproj" />
+  </ItemGroup>
+
+</Project>

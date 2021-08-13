@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net5.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Bitmaps\Breakpoint.png" />
+    <None Remove="Bitmaps\Current.png" />
+    <None Remove="Bitmaps\CurrentBreakpoint.png" />
+    <None Remove="Bitmaps\CurrentDrag.png" />
+    <None Remove="Bitmaps\Pause.png" />
+    <None Remove="Bitmaps\Restart.png" />
+    <None Remove="Bitmaps\Run.png" />
+    <None Remove="Bitmaps\RunToCursor.png" />
+    <None Remove="Bitmaps\StepInto.png" />
+    <None Remove="Bitmaps\StepOver.png" />
+    <None Remove="Bitmaps\Stop.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Documentation\Jumptable.txt" Link="Jumptable.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Bitmaps\Breakpoint.png" />
+    <EmbeddedResource Include="Bitmaps\Current.png" />
+    <EmbeddedResource Include="Bitmaps\CurrentBreakpoint.png" />
+    <EmbeddedResource Include="Bitmaps\CurrentDrag.png" />
+    <EmbeddedResource Include="Bitmaps\Pause.png" />
+    <EmbeddedResource Include="Bitmaps\Restart.png" />
+    <EmbeddedResource Include="Bitmaps\Run.png" />
+    <EmbeddedResource Include="Bitmaps\RunToCursor.png" />
+    <EmbeddedResource Include="Bitmaps\StepInto.png" />
+    <EmbeddedResource Include="Bitmaps\StepOver.png" />
+    <EmbeddedResource Include="Bitmaps\Stop.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Assembler\Assembler.csproj" />
+    <ProjectReference Include="..\CPCAmstrad\CPCAmstrad.csproj" />
+    <ProjectReference Include="..\Emulator\Emulator.csproj" />
+    <ProjectReference Include="..\Z80Core\Z80Core.csproj" />
+  </ItemGroup>
+
+</Project>

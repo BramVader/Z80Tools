@@ -1,0 +1,18 @@
+CRTC wordt met clock-frequentie van 1 MHz aangestuurd.
+Iedere klokpuls wordt een geheugencel geadresseerd.
+1 MHz <=> 1 µs = 1 karakter in mode 1 (40x25) = 16 pixels in mode 2.
+Eén scanline duurt 64µs (-1 te programmeren in Reg0 van CRTC), waarvan 40µs dus voor karakters en de rest voor Border.
+
+A PAL 50Hz video-frame on the Amstrad is 312 rasterlines: 312 * 64µs = 19.968 ms => 50,08 Hz
+
+
+
+Het signaal IORQ* heeft een dubbele betekenis voor de GA. Een bijzondere eigenschap van de Z80 is in geval van een toegelaten interrupt, het gelijktijdig laag maken van de signalen IORQ* en Ml*.
+
+Deze toestand wordt gedetecteerd door de GA en deze zal de interruptpuls onmiddellijk resetten. Is echter het afhandelen van de INT uitgeschakeld (door de DI instructie), dan blijft aansluiting 10 van de GA, tot het opnieuw toelaten van de INT, laag.
+
+Wanneer de INT weer is ingeschakeld met EI, wordt de aangeboden interrupt gedetecteerd en de Interrupt-uitgang wordt hoog geschakeld.
+Interrupt-signaal wordt gemaakt door HSYNC door 52 te delen. HSYNC treedt iedere 64 µs op. Hierdoor treedt de Interrupt-puls iedere ca. 3,3 ms op.
+Daarbij worden de impulsen met het VSYNC-signaal van de CRTC gekoppeld. De breedte van VSYNC is op de CRTC op ca 500µs ingesteld. Na ca. 125µs verschijnt Interrupt, waardoor de interrupt-routine nog ca. 375µs beschikbaar heeft om bit 0 van Port B van de 8255 te testen of er een VSYNC aanwezig is.
+Dit treedt echter maar eens in de 15 interrupts op. Bij de overige 14 treedt een High op de VSYNC op, de interne teller wordt niet beïnvloed.
+

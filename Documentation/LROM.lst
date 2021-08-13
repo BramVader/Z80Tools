@@ -1,0 +1,456 @@
+0000	01897F	ld		bc, 7fB9				;U Rom dis., Mode 1, res Teiler
+0003	ED49		out	(c), c
+0005	C38005	jp		0580					;RESET CONT’D
+0008	C382B9	jp		B982(0413)			;RST 1 LOW JUMP CONT'D
+000B	C37CB9	jp		B97C(040D)			;KL LOW PCHL CONT’D
+000E	C5			push	bc
+000F	C9			ret							;jp (bc)
+0010	C316BA	jp		BA16(04A7)			;RST 2 LOW SldE CALL CONT'D
+0013	C310BA	jp		BA10(04A1)			;KL SldE PCHL CONT’D
+0016	D5			push	de
+0017	C9			ret							;jp (de)
+0018	C3BFB9	jp		B9BF(0450)			;RST 3 LOW FAR CALL CONT’D
+001B	C3B1B9	jp		B9B1(0442)			;KL FAR PCHL CONT’D
+001E	E9			jp		(hl)
+001F	00			nop
+0020	C3CBBA	jp		BACB(055C)			;RST 4 RAM LAM CONT’D
+0023	C3B9B9	jp		B9B9(044A)			;KL FAR ICALL CONT’D
+0026	00			nop
+0027	00			nop
+0028	C32EBA	jp		BA2E(04BF)			;RST 5 FIRM JUMP CONT’D
+002B	00			nop
+002C	ED49		out	(C), C
+002E	D9			exx
+002F	FB			ei
+; *************************************************** RST6USER
+0030	F3			di								;RST0 nach High Kernel Restore
+0031	D9			exx
+0032	212B00	ld		hl, 002B
+0035	71			ld		(hl), c
+0036	1808		jr		0040
+0038	C339B9	jp		B939(03CA)			;RST 7 INTERRUPT ENTRY CONT’D
+003B	C9			ret							;EXT INTERRUPT
+003C	00			nop
+003D	00			nop
+003E	00			nop
+003F	00			nop
+; *************************** Bis hierher wird ins Ram kopiert
+0040	CBD1		set	2, c					;L Rom disable
+0042	18E8		jr		002C
+; ********************************** Restore High Kernel Jumps
+0044	214000	ld		hl, 0040				;003f
+0047	2D			dec	l						;bis
+0048	7E			ld		a, (hl)				;0000
+0049	77			ld		(hl), a				;ins Ram
+004A	20FB		jr		nz, 0047				;kopieren
+004C	3EC7		ld		a, C7					;RST 0 nach
+004E	323000	ld		(0030), a			;0030
+0051	219103	ld		hl, 0391				;Jump
+0054	1100B9	ld		de, B900(0391)		;Block
+0057	01E901	ld		bc, 01E9				;kopieren
+005A	EDBO		ldir
+; *********************************************** KL CHOKE OFF
+005C	F3	di
+005D	3AABB1	ld		a, (B1AB)			;(lfd. Rom-Konfig.)
+0060	ED5BA9B1	ld		de, (B1A9)			;(Einsprung lfd. Rom)
+0064	06C0		ld		b, C0					;Firmware-
+0066	2100B1	ld		hl, B100				;Ram
+0069	3600		ld		(hl), 00				;bis
+006B	23			inc	hl						;B1C0
+006C	10FB		djnz	0069					;löschen
+006E	47			ld		b, a
+006F	0EFF		ld		c, FF
+0071	A9			xor	c						;war ein Rom on ?
+0072	C0			ret	nz						;ja >
+0073	4F			ld		c, a
+0074	5F			ld		e, a
+0075	57			ld		d, a
+0076	C9			ret
+0077	7C			ld		a, h
+0078	B5			or		l
+0079	79			ld		a, c
+007A	2004		jr		nz, 0080
+007C	7D			ld		a, l					;falls hl=0
+007D	2106C0	ld		hl, C006				;Default laden
+0080	32A8B1	ld		(B1A8), a			;(lfd. Exp.-Rom)
+0083	32ABB1	ld		(B1AB), a			;(lfd. Rom-Konfig.)
+0086	22A9B1	ld		(BlA9), hl			;(Einsprung lfd. Rom)
+0089	21FFAB	ld		hl, ABFF				;Params für
+008C	114000	ld		de, 0040				;RST3 laden
+008F	01FFB0	ld		bc, B0FF
+0092	3100C0	ld		sp, C000
+0095	DF			rst	3						;FARCALL
+0096	A9B1		dw		B1A9
+0098	C7			rst 	0
+; ********************************************* KL TIME PLEASE
+0099	F3			di
+009A	ED5B89B1	ld		de, (B189)			;(Timer high)
+009E	2A87B1	ld		hl, (B187)			;(Timer low)
+00A1	FB			ei
+00A2	C9			ret
+; ************************************************ KL TIME SET
+00A3	F3			di
+00A4	AF			xor	a
+00A5	328BB1	ld		(B18B), a			;(Timerflag)
+00A8	ED5389B1	ld		(B189), de			;(Timer high)
+00AC	2287B1	ld		(B187), hl			;(Timer low)
+00AF	FB			ei
+00B0	C9			ret
+; ************************************************ Scan Events
+00B1	2187B1	ld		hl, B187				;Timer low
+00B4	34			inc	(hl)					;update
+00B5	23			inc	hl						;Timer
+00B6	28FC		jr		z, 00B4
+00B8	06F5		ld		b, F5
+00BA	ED78		in		a, (c)				;Port B
+00BC	1F			rra							;VSYNC?
+00BD	3008		jr		nc, 00C7				;nein >
+00BF	2A8CB1	ld		hl, (B18C)			;(Start Frame Fly Chain)
+00C2	7C			ld		a, h
+00C3	B7			or		a
+00C4	C45301	call	nz, 0153				;Kick Event
+00C7	2A8EB1	ld		hl, (B18E)			;(Start Fast Ticker Chain)
+00CA	7C			ld		a, h
+00CB	B7			or		a
+00CC	C45301	call	nz, 0153				;Kick Event
+00CF	CD611F	call	1F61					;Scan Sound Queues
+00D2	2192B1	ld		hl, B192				;Count for Ticker
+00D5	35			dec	(hl)
+00D6	C0			ret	nz
+00D7	3606		ld		(hl), 06
+00D9	CDB71B	call	1BB7					;Update Key State Map
+00DC	2A90B1	ld		hl, (B190)			;(Start Ticker Chain)
+00DF	7C			ld		a, h
+00E0	B7			or		a
+00E1	C8			ret	z
+00E2	2104B1	ld		hl, B104				;div. Flags f. Int. Rout.
+00E5	CBC6		set	0, (hl)				;Ticker Chain muss noch
+00E7	C9			ret							;bearbeitet werden
+00E8	2B			dec	hl
+00E9	3600		ld		(hl), 00
+00EB	2B			dec	hl
+00EC	3A01B1	ld		a, (B101)
+00EF	B7			or		a
+00F0	200C		jr		nz, 00FE
+00F2	2200B1	ld		(B100), hl			;(Start Int Pending Queue)
+00F5	2202B1	ld		(B102), hl
+00F8	2104B1	ld		hl, B104				;div. Flags f. Int. Rout.
+00FB	CBF6		set	6, (hl)
+00FD	C9			ret
+00FE	ED5B02B1	ld		de, (B102)
+0102	2202B1	ld		(B102), hl
+0105	EB			ex		de, hl
+0106	73			ld		(hl), e
+0107	23			inc	hl
+0108	72			ld		(hl), d
+0109	C9			ret
+010A	ED7305B1	ld		(B105), sp			;(sp save)
+010E	3187B1	ld		sp, B187				;Timer low
+0111	E5			push	hl
+0112	D5			push	de
+0113	C5			push	be
+0114	2104B1	ld		hl, B104				;div. Flags f. Int. Rout.
+0117	CB76		bit	6, (hl)
+0119	281E		jr		z, 0139
+011B	CBFE		set	7, (hl)
+011D	2A00B1	ld		hl, (B100)			;(Start Int Pending Queue)
+0120	7C			ld		a, h
+0121	B7			or		a
+0122	280E		jr		z, 0132
+0124	5E			ld		e, (hl)
+0125	23			inc	hl
+0126	56			ld		d, (hl)
+0127	ED5300B1	ld		(B100), de			;(Start Int Pending Queue)
+012B	23			inc	hl
+012C	CD0A02	call	020A
+012F	F3			di
+0130	18EB		jr		011D
+0132	2104B1	ld		hl, B104				;div. Flags f. Int. Rout.
+0135	CB46		bit	0, (hl)				;Ticker Queue pending?
+0137	2810		jr		z, 0149				;nein ==>
+0139	3600		ld		(hl), 00
+013B	37			scf
+013C	08			ex		af, af'
+013D	CD8901	call	0189					;Ticker Chain bearbeiten
+0140	B7			or		a
+0141	08			ex		af, af'
+0142	2104B1	ld		hl, B104				;div. Flags f. Int. Rout.
+0145	7E			ld		a, (hl)
+0146	B7			or		a						;noch etwas zu bearbeiten?
+0147	20D2		jr		nz, 011B				;ja ==>
+0149	3600		ld		(hl), 00				;alle Flags löschen
+014B	Cl			pop	be
+014C	D1			pop	de
+014D	El			pop	hl
+014E	ED7B05B1	ld		sp, (B105)			;sp rückladen
+0152	C9			ret
+; ************************************************* Kick Event
+0153	5E			ld		e, (hl)
+0154	23			inc	hl
+0155	7E			ld		a, (hl)
+0156	23			inc	hl
+0157	B7			or		a
+0158	CAE201	jp		z, 01E2				; KL EVENT
+015B	57			ld		d, a
+015C	D5			push	de
+015D	CDE201	call	01E2					; KL EVENT
+0160	E1			pop	hl
+0161	18F0		jr		0153					; Kick Event
+; ******************************************* KL NEW FRAME FLY
+0163	E5			push	hl
+0164	23			inc	hl
+0165	23			inc	hl
+0166	CDD201	call	01D2					; KL INIT EVENT
+0169	E1			pop	hl
+; ******************************************* KL ADD FRAME FLY
+016A	118CB1	ld		de, B18C				; Start Frame Fly Chain
+016D	C37303	jp		0373					; Add Event
+0170	118CB1	ld		de, B18C				; Start Frame Fly Chain
+0173	C38203	jp		0382					; Delete Event
+; ***************************************** KL NEW FAST TICKER
+0176	E5			push	hl
+0177	23			inc	hl
+0178	23			inc	hl
+0179	CDD201	call	01D2					; KL INIT EVENT
+017C	E1			pop	hl
+; ***************************************** KL ADD FAST TICKER
+017D	118EB1	ld		de, B18E				; Start Fast Ticker Chain
+0180	C37303	jp		0373					; Add Event
+; ***************************************** Delete Fast Ticker
+0183	118EB1	ld		de, B18E				; Start Fast Ticker Chain
+0186	C38203	jp		0382					; Delete Event
+; ************************************ Ticker Chain bearbeiten
+0189	2A90B1	ld		hl, (B190)			; (Start Ticker Chain)
+018C	7C			ld		a, h
+018D	B7			or		a
+018E	C8			ret	z
+018F	5E			ld		e, (hl)
+0190	23			inc	hl
+0191	56			ld		d, (hl)
+0192	23			inc	hl
+0193	4E			ld		c, (hl)
+0194	23			inc	hl
+0195	46			ld		b, (hl)
+0196	78			ld		a, b
+0197	B1			or		c
+0198	2816		jr		z, 01B0
+019A	0B			dec	be
+019B	78			ld		a, b
+019C	B1			or		c
+019D	200E		jr		nz,01AD
+019F	D5			push	de
+01A0	23			inc	hl
+01A1	23			inc	hl
+01A2	E5			push	hl
+01A3	23			inc	hl
+01A4	CDE201	call	01E2					; KL EVENT
+01A7	E1			pop	hl
+01A8	46			ld		b, (hl)
+01A9	2B			dec	hl
+01AA	4E			ld		c, (hl)
+01AB	2B			dec	hl
+01AC	D1			pop	de
+01AD	70			ld		(hl), b
+01AE	2B			dec	hl
+01AF	71			ld		(hl), c
+01B0	EB			ex		de, hl
+01B1	18D9		jr		018C
+
+; ********************************************** KL ADD TICKER
+01B3	E5			push	hl
+01B4	23			inc	hl
+01B5	23			inc	hl
+01B6	F3			di
+01B7	73			ld		(hl), e
+01B8	23			inc	hl
+01B9	72			ld		(hl), d
+01BA	23			inc	hl
+01BB	71			ld		(hl), c
+01BC	23			inc	hl
+01BD	70			ld		(hl), b
+01BE	E1			pop	hl
+01BF	1190B1	ld		de, B190				; Start Ticker Chain
+01C2	C37303	jp		0373					; Add Event
+
+; ********************************************** Delete Ticker
+01C5	1190B1	ld		de, B190				; Start Ticker Chain
+01C8	CD8203	call	0382					; Delete Event
+01CB	D0			ret	nc
+01CC	EB			ex		de, hl
+01CD	23			inc	hl
+01CE	5E			ld		e, (hl)
+01CF	23			inc	hl
+01D0	56			ld		d, (hl)
+01D1	C9			ret
+
+; ********************************************** KL INIT EVENT
+01D2	F3			di
+01D3	23			inc	hl
+01D4	23			inc	hl
+01D5	3600		ld		(hl),00
+01D7	23			inc	hl
+01D8	70			ld		(hl),b
+01D9	23			inc	hl
+01DA	73			ld		(hl),e
+01DB	23			inc	hl
+01DC	72			ld		(hl),d
+01DD	23			inc	hl
+01DE	71			ld		(hl),c
+01DF	23			inc	hl
+01E0	FB			ei
+01E1	C9			ret
+
+; *************************************************** KL EVENT
+01E2	23			inc	hl
+01E3	23			inc	hl
+01E4	F3			di
+01E5	7E			ld		a,(hl)
+01E6	34			inc	(hl)
+01E7	FA0602	jp		m,0206			;Event Cnt >127/<0
+01EA	B7			or		a
+01EB	2013		jr		nz,0200			;Event Cnt >0 & < 127
+01ED	23			inc	hl
+01EE	7E			ld		a,(hl)
+01EF	2B			dec	hl
+01F0	B7			or		a
+01Fl	F22F02	jp		p,022F			;Sync Event einhängen
+01F4	08			ex		af,af'
+01F5	3012		jr		nc,0209
+01F7	08			ex		af,af
+01F8	87			add	a,a
+01F9	F2E800	jp		p,00E8
+01FC	23			inc	hl
+01FD	23			inc	hl
+01FE	1823		jr		0223
+0200	08			ex		af,af'
+0201	3801		jr		c,0204
+0203	FB			ei
+0204	08			ex		af,af'
+0205	C9			ret
+0206	35			dec	(hl)
+0207	18F7		jr		0200
+0209	08			ex		af,af'
+020A	FB			ei
+020B	7E			ld		a,(hl)
+020C	B7			or		a
+020D	F8			ret	m
+020E	E5			push	hl
+020F	CDlC02	call	021C
+0212	E1			pop	hl
+0213	35			dec	(hl)
+0214	C8			ret	z
+0215	F20E02	jp		p,020E
+0218	34			inc	(hl)
+0219	C9			ret
+
+; ************************************************* KL DO SYNC
+021A	23			inc	hl
+021B	23			inc	hl
+021C	23			inc	hl
+021D	7E			ld		a,(hl)
+021E	23			inc	hl
+021F	1F			rra
+0220	D2B9B9	jp		nc,B9B9(044A)		; KL FAR ICALL CONT'D
+0223	5E			ld		e,(hl)
+0224	23			inc	hl
+0225	56			ld		d,(hl)
+0226	EB			ex		de,hl
+0227	E9			jp		(hl)
+
+; ********************************************** KL SYNC RESET
+0228	210000	ld		hl,0000
+022B	2294B1	ld		{B194), hl
+022E	C9			ret
+
+; *************************************** Sync Event einhangen
+022F	E5			push	hl
+0230	47			ld		b,a					;Priorität --> b
+0231	1196B1	ld		de,B196
+0234	EB			ex		de,hl
+0235	2B			dec	hl
+0236	2B			dec	hl
+0237	56			ld		d,(hl)				;Adr. nächster
+0238	2B			dec	hl						;Event Block
+0239	5E			ld		e,(hl)				;--> de
+023A	7A			ld		a,d
+023B	B7			or		a
+023C	2807		jr		z,0245
+023E	13			inc	de
+023F	13			inc	de
+0240	13			inc	de
+0241	1A			ld		a,(de)				;lfd Priorität > ge-
+0242	B8			cp		b						;fundene	Priorität?
+0243	30EF		jr		nc,0234				;nein -->
+0245	D1			pop	de
+0246	IB			dec	de
+0247	23			inc	hl
+0248	7E			ld		a,(hl)
+0249	12			ld		(de),a
+024A	IB			dec	de
+024B	72			ld		(bl),d
+024C	2B			dec	hl
+024D	7E			ld		a,(hl)
+024E	12			ld		(de),a
+024F	73			ld		(hl),e
+0250	08			ex		af,af'
+0251	3801		jr		c,0254
+0253	FB			ei
+0254	08			ex		af,af'
+0255	C9			ret
+
+; ********************************************** KL NEXT SYNC
+0256	F3			di
+0257	2A93B1	ld		hl,(B193)	;(Start Sync Pending Queue)
+025A	7C			ld		a,h
+025B	B7			or		a
+025C	2817		jr		z,0275
+025E	E5			push	hl
+025F	5E			ld		e,(hl)
+0260	23			inc	hl
+0261	56			ld		d,(hl)
+0262	23			inc	hl
+0263	23			inc	hl
+0264	3A95B1	ld		a,(B195)				;(Priorität lfd. Event)
+0267	BE			cp		(hl)
+0268	300A		jr		nc,0274
+026A	F5			push	af
+026B	7E			ld		a,(hl)
+026C	3295B1	ld		(B195),a				;(Priorität lfd. Event)
+026F	ED5393B1	ld		(B193),de	;(Start Sync Pending Queue)
+0273	F1			pop	af
+0274	E1			pop	hl
+0275	FB			ei
+0276	C9			ret
+
+; *********************************************** KL DONE SYNC
+0277	3295B1	ld		(B195),a			;(Priorität lfd. Event)
+027A	23			inc	hl
+027B	23			inc	hl
+027C	35			dec	(hl)
+027D	C8			ret	z
+027E	F3			di
+027F	F22F02	jp		p,022F				; Sync Event einhängen
+0282	34			inc	(hl)
+0283	FB			ei
+0284	C9			ret
+
+; ***************************************** KL DEL SYNCHRONOUS
+0285	CD8E02	call	028E				;KL DISARM EVENT
+0288	1193B1	ld		de,B193			;Start Sync Pending Queue
+028B	C38203	jp		0382				;Delete Event
+; ******************************************* KL DISARM EVENT
+028E	23			inc	hl
+028F	23			inc	hl
+0290	36C0		ld		(hl),C0
+0292	2B			dec	hl
+0293	2B			dec	hl
+0294	C9			ret
+; ******************************************* KL EVENT DISABLE
+0295	2195B1	ld		hl,B195
+0298	CBEE		set	5,(hl)
+029A	C9			ret
+; ******************************************** KL EVENT ENABLE
+029B	2195B1	ld		hl,B195
+029E	CBAE		res	5,(hl)
+02A0	C9			ret
+

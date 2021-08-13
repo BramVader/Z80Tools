@@ -1,0 +1,1052 @@
+; JUMP TABLE
+
+B900	KL U ROM ENABLE				;Enables the current upper ROM
+B903	KL U ROM DISABLE				;Disables the upper ROM
+B906	KL L ROM ENABLE				;Enables the lower ROM
+B909	KL L ROM DISABL				;Disables the lower ROM
+B90C	KL ROM RESTORE					;Restores the ROM to its previous state
+B90F	KL ROM SELECT					;Selects an upper ROM and also enables it
+B912	KL CURR SELECTION				;Gets the ROM select address of the current ROM
+B915	KL PROBE ROM					;Gets the class and version of a specified ROM
+B918	KL ROM DESELECT				;Selects the previous upper ROM and sets its state
+B91B	KL LDIR							;Switches off the upper and lower ROMs, and moves a block of memory
+B91E	KL LDDR							;Switches off the upper and lower ROMs, amd moves a block of memory
+B921	KL POLL SYNCHRONOUS			;Tests whether an event with a higher priority than the current event is waiting to be dealt with
+B92A	KL SCAN NEEDED					;Ensures that the keyboard is scanned when the next ticker interrupt occurs
+BA5E	KL R ROM ENABLE CONT'D
+BA68	KL U ROM DISABLE CONT'D
+BA4A	KL L ROM ENABLE CONT'D
+BA54	KL L ROM DISABLE CONT'D
+BA72	KL ROM RESTORE CONT'D
+BA7E	KL ROM SELECT CONT'D
+BAA2	KL CURR SELECTION CONT'D
+BA83	KL PROBE ROM CONT'D
+BA8C	KL ROM DESELECT CONT'D
+BAA6	KL LDIR CONT'D
+BAAC	KL LDDR CONT'D
+BB00	KM INITIALISE					;Initialises the Key Manager and sets up everything as it is when the computer is first switched on; the key buffer is emptied, Shift and Caps lock are turned off
+BB03	KM RESET							;Resets the Key Manager; the key buffer is emptied and all current keys/characters are ignored
+BB06	KM WAIT CHAR					;Waits for the next character from the keyboard buffer
+BB09	KM READ CHAR					;Tests to see if a character is available from the keyboard buffer, but doesn't wait for one to become available
+BB0C	KM CHAR RETURN					;Saves a character for the next use of KM WAIT CHAR or KM READ CHAR
+BB0F	KM SET EXPAND					;Assigns a string to a key code
+BB12	KM GET EXPAND					;Reads a character from an expanded string of characters
+BB15	KM EXP BUFFER					;Sets aside a buffer area for character expansion strings
+BB18	KM WAIT KEY						;Waits for a key to be pressed - this routine does not expand any expansion tokens
+BB1B	KM READ KEY						;Tests whether a key is available from the keyboard
+BB1E	KM TEST KEY						;Tests if a particular key (or joystick direction or button) is pressed
+BB21	KM GET STATE					;Gets the state of the Shift and Caps locks
+BB24	KM GET JOYSTICK				;Reads the present state of any joysticks attached
+BB27	KM SET TRANSLATE				;Sets the token or character that is assigned to a key when neither Shift nor Control are pressed
+BB2A	KM GET TRANSLATE				;Finds out what token or character will be assigned to a key when neither Shift nor Control are pressed
+BB2D	KM SET SHIFT					;Sets the token or character that will be assigned to a key when Shift is pressed as well
+BB30	KM GET SHIFT					;Finds out what token/character will be assigned to a key when Shift is pressed as well
+BB33	KM SET CONTROL					;Sets the token or character that will be assigned to a key when Control is pressed as well
+BB36	KM GET CONTROL					;Finds out what token or character will be assigned to a key when Control is pressed as well
+BB39	KM SET REPEAT					;Sets whether a key may repeat or not
+BB3C	KM GET REPEAT					;Finds out whether a key is set to repeat or not
+BB3F	KM SET DELAY					;Sets the time that elapses before the first repeat, and also set the repeat speed
+BB42	KM GET DELAY					;Finds out the time that elapses before the first repeat and also the repeat speed
+BB45	KM ARM BREAK					;Arms the Break mechanism
+BB48	KM DISARM BREAK				;Disables the Break mechanism
+BB4B	KM BREAK EVENT					;Generates a Break interrupt if a Break routine has been specified by KM ARM BREAK
+BB4E	TXT INITIALISE					;Initialise the text VDU to its settings when the computer is switched on, includes resetting all the text VDU indirections, selecting Stream 0, resetting the text paper
+BB51	TXT RESET						;Resets the text VDU indirections and the control code table
+BB54	TXT VDU ENABLE					;Allows characters to be printed on the screen in the current stream
+BB57	TXT VDU DISABLE				;Prevents characters from being printed to the current stream
+BB5A	TXT OUTPUT						;Output a character or control code (00 to 1F) to the screen
+BB5D	TXT WR CHAR						;Print a character at the current cursor position - control codes are printed and not obeyed
+BB60	TXT RD CHAR						;Read a character from the screen at the current cursor position
+BB63	TXT SET GRAPHIC				;Enables or disables graphics print character mode
+BB66	TXT WIN ENABLE					;Sets the boundaries of the current text window - uses physical coordinates
+BB69	TXT GET WINDOW					;Returns the size of the current window - returns physical coordinates
+BB6C	TXT CLEAR WINDOW				;Clears the window (of the current stream) and moves the cursor to the top left corner of the window
+BB6F	TXT SET COLUMN					;Sets the cursor's horizontal position
+BB72	TXT SET ROW						;Sets the cursor's vertical position
+BB75	TXT SET CURSOR					;Sets the cursor's vertical and horizontal position
+BB78	TXT GET CURSOR					;Gets the cursor's current position
+BB7B	TXT CUR ENABLE					;Allows the text cursor to be displayed (if it is allowed by TXT CUR ON) - intended for use by the user
+BB7E	TXT CUR DISABLE				;Prevents the text cursor from being displayed -intended for use by the user
+BB81	TXT CUR ON						;Allows the text cursor to be displayed - intended for use by the operating system
+BB84	TXT CUR OFF						;Prevents the text cursor from being displayed -intended for use by the operating system
+BB87	TXT VALIDATE					;Checks whether a cursor position is within the current window
+BB8A	TXT PLACE CURSOR				;Puts a `cursor blob' on the screen at the current cursor position
+BB8D	TXT REMOVE CURSOR				;Removes a `cursor blob' from the current cursor position
+BB90	TXT SET PEN						;Sets the foreground PEN for the current stream
+BB93	TXT GET PEN						;Gets the foreground PEN for the current stream
+BB96	TXT SET PAPER					;Sets the background PAPER for the current stream
+BB99	TXT GET PAPER					;Gets the background PAPER for the current stream
+BB9C	TXT INVERSE						;Swaps the current PEN and PAPER colours over for the current stream
+BB9F	TXT SET BACK					;Sets the character write mode to either opaque or transparent
+BBA2	TXT GET BACK					;Gets the character write mode for the current stream
+BBA5	TXT GET MATRIX					;Gets the address of a character matrix
+BBA8	TXT SET MATRIX					;Installs a matrix for a user-defined character
+BBAB	TXT SET M TABLE				;Sets the address of a user-defined matrix table
+BBAE	TXT GET M TABLE				;Gets the address of a user-defined matrix table
+BBB1	TXT GET CONTROLS				;Gets the address of the control code table
+BBB4	TXT STR SELECT					;Selects a new VDU text stream
+BBB7	TXT SWAP STREAMS				;Swaps the states of two stream attribute tables
+BBBA	GRA INITIALISE						;Initialises the graphics VDU to its default set-up (ie its set-up when the computer is switched on)
+BBBD	GRA RESET						;Resets the graphics VDU
+BBC0	GRA MOVE ABSOLUTE					;Moves the graphics cursor to an absolute screen position
+BBC3	GRA MOVE RELATIVE					;Moves the graphics cursor to a point relative to its present screen position
+BBC6	GRA ASK CURSOR					;Gets the graphics cursor's current position
+BBC9	GRA SET ORIGIN					;Sets the graphics user origin's screen position
+BBCC	GRA GET ORIGIN					;Gets the graphics user origin's screen position
+BBCF	GRA WIN WIDTH					;Sets the left and right edges of the graphics window
+BBD2	GRA WIN HEIGHT					;Sets the top and bottom edges of the graphics window
+BBD5	GRA GET W WIDTH				;Gets the left and right edges of the graphics window
+BBD8	GRA GET W HEIGHT				;Gets the top and bottom edges of the graphics window
+BBDB	GRA CLEAR WINDOW				;Clears the graphics window to the graphics paper colour and moves the cursor back to the user origin
+BBDE	GRA SET PEN						;Sets the graphics PEN
+BBE1	GRA GET PEN						;Gets the graphics PEN
+BBE4	GRA SET PAPER					;Sets the graphics PAPER
+BBE7	GRA GET PAPER					;Gets the graphics PAPER
+BBEA	GRA PLOT ABSOLUTE				;Plots a point at an absolute user coordinate, using the GRA PLOT indirection
+BBED	GRA PLOT RELATIVE				;Plots a point at a position relative to the current graphics cursor, using the GRA PLOT indirection
+BBF0	GRA TEST ABSOLUTE				;Moves to an absolute position, and tests the point there using the GRA TEST indirection
+BBF3	GRA TEST RELATIVE				;Moves to a position relative to the current position, and tests the point there using the GRA TEST indirection
+BBF6	GRA LlNE ABSOLUTE				;Draws a line from the current graphics position to an absolute position, using GRA LINE
+BBF9	GRA LINE RELATIVE				;Draws a line from the current graphics position to a relative screen position, using GRA LINE
+BBFC	GRA WR CHAR						;Writes a character onto the screen at the current graphics position
+BBFF	SCR INITIALISE					;Initialises the Screen Pack to the default values used when the computer is first switched on
+BC02	SCR RESET						;Resets the Screen Pack's indirections, flashing speeds and inks to their default values
+BC05	SCR SET OFFSET					;Sets the screen offset to the specified values - this can cause the screen to scroll
+BC08	SCR SET BASE					;Sets the location in memory of the screen - effectively can only be C000 or 4000
+BC0B	SCR GET LOCATION				;Gets the location of the screen memory and also the screen offset
+BC0E	SCR SET MODE					;Sets the screen mode
+BC11	SCR GET MODE					;Gets the current screen mode
+BC14	SCR CLEAR						;Clears the whole of the screen
+BC17	SCR CHAR LIMITS				;Gets the size of the whole screen in terms of the numbers of characters that can be displayed
+BC1A	SCR CHAR POSITION				;Gets the memory address of the top left corner of a specified character position
+BC1D	SCR DOT POSITION				;Gets the memory address of a pixel at a specified screen position
+BC20	SCR NEXT BYTE					;Calculates the screen address of the byte to the right of the specified screen address (may be on the next line)
+BC23	SCR PREV BYTE					;Calculates the screen address of the byte to the left of the specified screen address (this address may actually be on the previous line)
+BC26	SCR NEXT LINE					;Calculates the screen address of the byte below the specified screen address
+BC29	SCR PREV LINE					;Calculates the screen address of the byte above the specified screen address
+BC2C	SCR INK ENCODE					;Converts a PEN to provide a mask which, if applied to a screen byte, will convert all of the pixels in the byte to the appropriate PEN
+BC2F	SCR INK DECODE					;Converts a PEN mask into the PEN number (see SCR INK ENCODE for the re~ erse process)
+BC32	SCR SET INK						;Sets the colours of a PEN - if the two values supplied are different then the colours will alternate (flash)
+BC35	SCR GET INK						;Gets the colours of a PEN
+BC38	SCR SET BORDER					;Sets the colours of the border - again if two different values are supplied, the border will flash
+BC3B	SCR GET BORDER					;Gets the colours of the border
+BC3E	SCR SET FLASHING				;Sets the speed with which the border's and PENs' colours flash
+BC41	SCR GET FLASHING				;Gets the periods with which the colours of the border and PENs flash
+BC44	SCR FILL BOX					;Fills an area of the screen with an ink - this only works for `character-sized' blocks of screen
+BC17	SCR FLOOD BOX					;Fills an area of the screen with an ink - this only works for `byte-sized' blocks of screen
+BC4A	SCR CHAR INVERT				;Inverts a character's colours; all pixels in one PEN's colour are printed in another PEN's colour, and vice versa
+BC4D	SCR HW ROLL						;Scrolls the entire screen up or down by eight pixel rows (ie one character line)
+BC50	SCR SW ROLL						;Scrolls part of the screen up or down by eight pixel lines - only for `character-sized' blocks of the screen
+BC53	SCR UNPACK						;Changes a character matrix from its eight byte standard form into a set of pixel masks which are suitable for the current mode - four *8 bytes are needed in mode 0, two *8 
+BC56	SCR REPACK						;Changes a set of pixel masks (for the current mode) into a standard eight byte character matrix
+BC59	SCR ACCESS						;Sets the screen write mode for graphics
+BC5C	SCR PIXELS						;Puts a pixel or pixels on the screen regardless of the write mode specified by SCR ACCESS above
+BC5F	SCR HORIZONTAL					;Draws a honzontal line on the screen using the current graphics write mode
+BC62	SCR VERTICAL					;Draws a vertical line on the screen using the current graphics write mode
+BC65	CAS INITIALISE					;Initialises the cassette manager
+BC68	CAS SET SPEED					;Sets the speed at which the cassette manager saves programs
+BC6B	CAS NOISY						;Enables or disables the display of cassette handling messages
+BC6E	CAS START MOTOR				;Switches on the tape motor
+BC71	CAS STOP MOTOR					;Switches off the tape motor
+BC74	CAS RESTORE MOTOR				;Resets the tape motor to its previous state
+BC77	CAS IN OPEN						;Opens an input buffer and reads the first block of the file
+BC7A	CAS IN CLOSE					;Closes an input file
+BC7D	CAS IN ABANDON					;Abandons an input file
+BC80	CAS IN CHAR						;Reads in a single byte from a file
+BC83	CAS IN DIRECT					;Reads an entire file directly into memory
+BC86	CAS RETURN						;Puts the last byte read back into the input buffer so that it can be read again at a later time
+BC89	CAS TEST EOF					;Tests whether the end of file has been encountered
+BC8C	CAS OUT OPEN					;Opens an output file
+BC8F	CAS OUT CLOSE					;Closes an output file
+BC92	CAS OUT ABANDON				;Abandons an output file
+BC95	CAS OUT CHAR					;Writes a single byte to a file
+BC98	CAS OUT DIRECT					;Writes an entire file directly to tape
+BC9B	CAS CATALOG						;Creates a catalogue of all the files on the tape
+BC9E	CAS WRITE						;Writes data to the tape in one long file (ie not in 2K blocks)
+BCA1	CAS READ							;Reads data from the tape in one long file (ie as originally written by CAS WRITE only)
+BCA4	CAS CHECK						;Compares the contents of memory with a file record (ie header or data) on tape
+BCA7	SOUND RESET						;Resets the sound manager by clearing the sound queues and abandoning any current sounds
+BCAA	SOUND QUEUE						;Adds a sound to the sound queue of a channel
+BCAD	SOUND CHECK						;Gets the status of a sound channel
+BCB0	SOUND ARM EVENT				;Sets up an event which will be activated when a space occurs in a sound queue
+BCB3	SOUND RELEASE					;Allows the playing of sounds on specific channels that had been stopped by SOUND HOLD
+BCB6	SOUND HOLD						;Immediately stops all sound output (on all channels)
+BCB9	SOUND CONTINUE					;Restarts all sound output (on all channels)
+BCBC	SOUND AMPL ENVELOPE			;Sets up avolume envelope
+BCBF	SOUND TONE ENVELOPE			;Sets up a tone envelope
+BCC2	SOUND A ADDRESS				;Gets the address of the data block associated with a volume envelope
+BCC5	SOUND T ADDRESS				;Gets the address of the data block associated with a tone envelope
+BCC8	KL CHOKE OFF					;Clears all event queues and timer lists, with the exception of keyboard scanning and sound routines
+BCCB	KL ROM WALK						;Finds and initialises all background ROMs
+BCCE	KL INIT BACK					;Finds and initialises a specific background ROM
+BCD1	KL LOG EXT						;Logs on a new RSX to the firmware
+BCD4	KL FIND COMMAND				;Searches an RSX, background ROM or foreground ROM, to find a command in its table
+BCD7	KL NEW FRAME FLY				;Sets up a frame flyback event block which will be acted on whenever a frame flyback occurs
+BCDA	KL ADD FRAME FLY				;Adds an existing but deleted frame flyback event block to the list of routines run when a frame flyback occurs
+BCDD	KL DEL FRAME FLY				;Removes a frame flyback event block from the list of routines which are mn when a frame flyback occurs
+BCE0	KL NEW FAST TICKER			;Sets up a fast ticker event block which will be run whenever the l/300th second ticker interrupt occurs
+BCE3	KL ADD FAST TICKER			;Adds an existing but deleted fast ticker event block to the list of routines which are run when the l/300th sec ticker interrupt occurs
+BCE6	KL DEL FAST TICKER			;Removes a fast ticker event block from the list of routines run when the l/300th sec ticker interrupt occurs
+BCE9	KL ADD TICKER					;Sets up a ticker event block which will be run whenever a 1/50th second ticker interrupt occurs
+BCEC	KL DEL TICKER					;Removes a ticker event block from the list of routines that are run when a l/50th sec ticker interrupt occurs
+BCEF	KL INIT EVENT					;Initialises an event block
+BCF2	KL EVENT							;Kicks an event block
+BCF5	KL SYNC RESET					;Clears the synchronous event queue
+BCF8	KL DEL SYNCHRONOUS			;Removes a synchronous event from the event queue
+BCFB	KL NEXT SYNC					;Finds out if there is a synchronous event with a higher priority
+BCFE	KL DO SYNC						;Runs a synchronous event routine
+BD01	KL DONE SYNC					;Finishes running a synchronous event routine
+BD04	KL EVENT DISABLE				;Disables norrnal synchronous events
+BD07	KL EVENT ENABLE				;Enables normal synchronous events
+BD0A	KL DISARM EVENT				;Disarrns a specific event and stops it from occurring
+BD0D	KL TIME PLEASE					;Returns the time that has elapsed since the computer was switched on or reset (in 1/300ths of a second)
+BD10	KL TIME SET						;Sets the elapsed time (in l¡300ths of a second)
+BD13	MC BOOT PROGRAM				;Loads a program into RAM and then executes it
+BD16	MC START PROGRAM				;Runs a foreground program
+BD19	MC WAIT FLYBACK				;Waits until a frame flyback occurs
+BD1C	MC SET MODE						;Sets the screen mode
+BD1F	MC SCREEN OFFSET				;Sets the screen offset
+BD22	MC CLEAR INKS					;Sets all the PENs and the border to one colour, so making it seem as if the screen has been cleared
+BD25	MC SET INKS						;Sets the colours of all the PENs and the border
+BD28	MC RESET PRINTER				;Sets the MC WAIT PRINTER indirection to its original routine
+BD2B	MC PRINT CHAR					;Sends a character to the printer and detects if it is busy for too long (more than 0.4 seconds)
+BD2E	MC BUSY PRINTER				;Tests to see if the printer is busy
+BD31	MC SEND PRINTER				;Sends a character to the printer, which must not be busy
+BD34	MC SOUND REGISTER				;Sends data to a sound chip register
+BD37	JUMP RESTORE					;Restores the jumpblock to its default state
+BD3D	MOVE REAL 						;Copies the five bytes that are pointed to by DE to the location held in HL
+BD40	INTEGER TO REAL 				;Converts an integer value into a real value
+BD43	BINARY TO REAL 				;Converts a four byte binary value into a real value at the same location
+BD46	REAL TO INTEGER				;Converts a real value, rounding it into an unsigned integer value held in HL
+BD49	REAL TO BINARY 				;Converts a real value, rounding it into a four byte binary value at the same location
+BD4C	REAL FIX							;Performs an equivalent of BASIC's FIX function on a real value, leaving the result as a four byte binary value at the same location
+BD4F	REAL INT							;Performs an equivalent of BASIC's INT function on a real value, leaving the result as a four byte binary value at the same location
+BD55	REAL *10^A						;Multiplies a real value by 10 to the power of the value in the A register, leaving the result at the same location
+BD58	REAL ADDITION					;Adds two real values, and leaves the result in lieu of the first real number
+BD5B	REAL SUBTRACTION				;Subtracts the second real value from the first real value, and leaves the result in lieu of the first number
+BD5E	REAL REVERSE SUBTRACTION	;Subtracts the first real value from the second real value, and leaves the result in lieu of the first number
+BD61	REAL MULTIPLICATION			;Multiplies two real values together, and leaves the result in lieu of the first number
+BD64	REAL DIVISION					;Divides the first real value by the second real value, and leaves the result in lieu of the first number
+BD67	REAL EXPONENT ADDITION		;Adds the value of the A register to the exponent byte of a real number
+BD6A	REAL COMPARISON				;Compares two real values
+BD6D	REAL UNARY MINUS				;Reverses the sign of a real value
+BD70	REAL SIGNUM/SGN				;Tests a real value, and compares it with zero
+BD73	SET ANGLE MODE					;Sets the angular calculation mode to either degrees (DEG) or radians (RAD)
+BD76	REAL PI							;Places the real value of pi at a given memory location
+BD79	REAL SQR							;Calculates the square root of a real value, leaving the result in lieu of the real value
+BD7C	REAL POWER						;Raises the first real value to the power of the second real value, leaving the result in lieu of the first real value
+BD7F	REAL LOG							;Returns the naperian logarithm (to base e) of a real value, leaving the result in lieu of the real value
+BD82	REAL LOG 10						;Returns the logarithm (to base 10) of a real value, leaving the result in lieu of the real value
+BD85	REAL EXP							;Returns the antilogarithm (base e) of a real value, leaving the result in lieu of the real value
+BD88	REAL SINE						;Returns the sine of a real value, leaving the result in lieu of the real value
+BD8B	REAL COSINE						;Returns the cosine of a real value, leaving a the result in lieu of the real value
+BD8E	REAL TANGENT					;Returns the tangent of a real value, leaving the result in lieu of the real value
+BD91	REAL ARCTANGENT				;Returns the arctangent of a real value, leaving the result in lieu of the real value
+BDAC	INTEGER ADDITION				;Adds two signed integer values
+BDAF	INTEGER SUBTRACTION			;Subtracts the second signed integer value from the first signed integer value
+BDB2	INTEGER REVERSE SUBTRACTION;Subtracts the first signed integer value from the second signed integer value
+BDB5	INTEGER MULTIPLICATION		;Multiplies two signed integer values together, and leaves the result in lieu of the first number
+BDB8	INTEGER DIVISION				;Divides the first signed integer value by the second signed integer value
+BDBB	INTEGER DIVISION 2			;Divides the first signed integer value by the second signed integer value
+BDC4	INTEGER COMPARISON			;Compares two signed integer values
+BDC7	INTEGER UNARY MINUS			;Reverses the sign of an integer value (by subtracting it from 10000)
+BDCA	INTEGER SIGNUM/SGN			;Tests a signed integer value
+BDCD	TXT DRAW CURSOR				;Places the cursor on the screen, if the cursor is enabled
+BDD0	TXT UNDRAW CURSOR				;Removes the cursor from the screen, if the cursor is enabled
+BDD3	TXT WRITE CHAR					;Writes a character onto the screen
+BDD6	TXT UNWRITE						;Reads a character from the screen
+BDD9	TXT OUT ACTION					;Writes a character to the screen or obeys a control code (00 to 1F)
+BDDC	GRA PLOT							;Plots a point in the current graphics PEN
+BDDF	GRA TEST							;Tests a point and finds out what PEN it is set to
+BDE2	GRA LINE							;Draws a line in the current graphics PEN, from the current graphics position to the specified point
+BDE5	SCR READ							;Reads a pixel from the screen and returns its decode a PEN
+BDE8	SCR WRITE						;Writes one or more pixels to the screen
+BDEB	SCR MODE CLEAR					;Fills the entire screen memory with 00, which clears the screen to PEN 0
+BDEE	KM TEST BREAK					;Tests if the ESC key has been pressed, and acts accordingly
+BDF1	MC WAIT PRINTER				;Sends a character to the printer if it is not busy
+BDF4	KM SCAN KEYS					;Scans the keyboard every 1/50th of a second, and updates the status of all keys
+
+; LOWER ROM
+
+0000	RESET ENTRY (RST 0)			;Resets the computer as if it has just been switched on
+0008	LOW JUMP (RST 1)				;Jumps to a routine in either the lower ROM or low RAM
+000B	KL LOW PCHL						;Jumps to a routine in either the lower ROM or low RAM
+000E	PCBC INSTRUCTION				;Jumps to the specified address
+0010	SIDE CALL (RST 2)				;Calls a routine in ROM, in a group of up to four foreground ROMs
+0013	KL SIDE PCHL					;Calls a routine in another ROM
+0016	PCDE INSTRUCTION				;Jumps to the specified address
+0018	FAR CALL (RST 3)				;Calls a routine anywhere in ROM or ROM
+001B	KL FAR PCHL						;Calls a routine, given by the far address in HL	C, anywhere in RAM or ROM
+001E	PCHL INSTRUCTION				;Jumps to the specified address
+0020	RAM LAM							;Puts the contents of a RAM memory location into the A register
+0023	KL FAR CALL						;Calls a routine anywhere in RAM or ROM
+0028	FIRM JUMP (RST 5)				;Jumps to a routine in either the lower ROM or the central 32K of RAM
+0030	USER RESTART (RST 6)			;This is an RST instruction that may be set aside by the user for any purpose
+0038	INTERRUPT ENTRY (RST 7)		;Deals with normal interrupts
+003B	EXT INTERRUPT					;This area is set aside for dealing with external interrupts that are generated by any extra hardware
+0040	START						;Bis hierher wird ins Kam kopiert
+0044	JUMP RESTORE
+005C	KL CHOKE OFF
+0099	KL TIME PLEASE
+00A3	KL TIME SET
+00B1	Scan Events
+0153	Kick Event
+0163	KL NEW FRAME FLY
+016A	KL ADD FRAME FLY
+0176	KL NEW FAST TICKER
+017D	KL ADD FAST TICKER
+0183	Delete Fast Ticker
+0189	Ticker Chain bearbeiten
+01B3	KL ADD TICKER
+01C5	Delete Ticker
+01D2	KL INIT EVENT
+01E2	KL EVENT
+021A	KL DO SYNC
+0228	KL SYNC RESET
+022F	Sync Event einhängen
+0256	KL NEXT SYNC
+0277	KL DONE SYNC
+0285	KL DEL SYNCHRONOUS
+028E	KL DISARM EVENT
+0295	KL EVENT DISABLE
+029B	KL EVENT ENABLE
+02A1	KL LOG EXT
+02B2	KL FIND COMMAND
+0329	KL ROM WALK
+0332	KL INIT BACK
+0373	Add Event
+0382	Delete Event
+03B2	KL POLL SYCHRONOUS
+03CA	RST 7 INTERRUPT ENTRY CONT'D
+0401	EXT INTERRUPT ENTRY
+040D	KL LOW PCHL CONT'D
+0413	RST 1 LOW JUMP CONT'D
+0442	KL FAR PCHL CONT'D
+044A	KL FAR ICALL CONT'D
+0450	RST 3 LOW FAR CALL CONT'D
+04A1	KL SIDE PCHL CONT'D
+04A7	RST 2 LOW SIDE CALL CONT'D
+04BF	RST 5 FIRM JUMP CONT'D
+04DB	KL L ROM ENABLE CONT'D
+04E5	KL L ROM DISABLE CONT'D
+04EF	KL R ROM ENABLE CONT'D
+04F9	KL U ROM DISABLE CONT'D
+04DB	KL L ROM ENABLE CONT'D
+04E5	KL L ROM DISABLE CONT'D
+0503	KL ROM RESTORE CONT'D
+050F	KL ROM SELECT CONT'D
+0533	KL CURR SELECTION CONT'D
+0514	KL PROBE ROM CONT'D
+051D	KL ROM DESELECT CONT'D
+0537	KL LDIR CONT'D
+053D	KL LDDR CONT'D
+0543	Rom off & Konfig. save
+055C	RAM LAM
+056D	RAM LAM (IX)
+0580	RESET CONT'D
+05B4	Tabelle 60Hz
+05C4	Tabelle 50Hz
+05DC	MC BOOT PROGRAM
+060B	MC START PROGRAM
+065C	Kaltstart
+066D	Einschaltmeldung
+0693	Copyright - Meldung
+06EB	Meldungen ausgeben
+06F4	Ladefehler- Meldung
+0727	Firmennamen
+0776	MC SET MODE
+0786	MC CLEAR INKS
+0799	MC SET INKS
+07AB	Farbe ausgeben
+07BA	MC WAIT FLYBACK
+07C6	MC SCREEN OFFSET
+07E6	MC RESET PRINTER
+07F2	MC PRINT CHAR
+07F8	MC WAIT PRINTER
+0807	MC SEND PRINTER
+081B	MC BUSY PRINTER
+0826	MC SOUND REGISTER
+0846	Scan Keyboard
+0888	JUMP RESTORE
+08AC	Main Jump Adr.
+0A28	Basic Jump Adr.
+0A8A	Move (hl+3)=>((hl+1)),cnt=(hl)
+0AA0	SCR INITIALISE
+0AB1	SCR RESET
+0ACA	SCR SET MODE
+0AEC	SCR GET MODE
+0AF7	SCR MODE CLEAR
+0B11	Bit Masken laden
+0B2E	Bit Masken Mode 2
+0B36	Bit Masken Mode 1
+0B3A	Bit Masken Mode 0
+0B3C	SCR SET OFFSET
+0B45	SCR SET BASE
+0B50	SCR GET LOCATION
+0B57	SCR CHAR LIMITS
+0B64	SCR CHAR POSITION
+0BA9	SCR DOT POSITION
+0BF9	SCR NEXT BYTE
+0C05	SCR PREV BYTE
+0C13	SCR NEXT LINE
+0C2D	SCR PREV LINE
+0C49	SCR ACCESS
+0C68	SCR WRITE
+0C6B	SCR PIXELS (FORCE Mode)
+0C72	XOR Mode
+0C77	AND Mode
+0C7D	OR Mode
+0C82	SCR READ
+0C86	SCR INK ENCODE
+0CA0	SCR INK DECODE
+0CD2	Reset Farben
+0CE4	SCR SET FLASHING
+0CE8	SCR GET FLASHING
+0CEC	SCR SET INK
+0CF1	SCR SET BORDER
+0CF2	Set Colour
+0D0A	Farbmatrix Eintrag holen
+0D14	SCR GET INK
+0D19	SCR GET BORDER
+0D1A	Get Colour
+0D2F	Ink Adr. holen
+0D5B	Set Inks on Frame Fly
+0D6D	Flash Inks
+0D81	Params d. lfd Farbsatz holen
+0D93	Farbmatrix
+0DB3	SCR FILL BOX
+0DB7	SCR FLOOD BOX
+0DDF	SCR CHAR INVERT
+0DF2	Farbspeicher adressieren
+0DFA	SCR HW ROLL
+0E3E	SCR SW ROLL
+0EF3	SCR UNPACK
+0F49	SCR REPACK
+0FC4	SCR HORIZONTAL
+102F	SCR VERTICAL
+104D	Default Farben
+1078	TXT INITIALISE
+1088	TXT RESET
+10A3	Reset Params (alle Fenster)
+10E8	TXT STR SELECT
+1107	TXT SWAP STREAMS
+1122	ldircnt=15
+112A	Adr. Fenster Params de
+113D	TXT Default Params setzen
+115E	TXT SET COLUMN
+1169	TXT SET ROW
+1174	TXT SET CURSOR
+1180	TXT GET CURSOR
+118A	lfd Fenst. obentlinks + hl
+1197	lfd Fenster oben,links-hi
+11A8	move Cursor
+11CE	TXT VALIDATE
+11DA	hi innerhalb Fenstergrenzen?
+120C	TXT WIN ENABLE
+1256	TXT GET WINDOW
+1263	TXT DRAW/UNDRAW CURSOR
+1268	TXT PLACE/REMOVE CURSOR
+1279	TXT CUR ON
+1281	TXT CUR OFF
+1289	TXT CUR ENABLE
+128B	Cur Enable Cont'd
+129A	TXT CUR DISABLE
+129C	Cur Disable Cont'd
+12A9	TXT SET PEN
+12AE	TXT SET PAPER
+12BD	TXT GET PEN
+12C3	TXT GET PAPER
+12C9	TXT INVERSE
+12D3	TXT GET MATRIX
+12F1	TXT SET MATRIX
+12FD	TXT SET M TABLE
+132A	TXT GET M TABLE
+1334	TXT WR CHAR
+134A	TXT WRITE CHAR
+137A	TXT SET BACK
+1387	TXT GET BACK
+13A7	TXT SET GRAPHIC
+13AB	TXT RD CHAR
+13C0	TXT UN WRITE
+1400	TXT OUTPUT
+140C	TXT OUT ACTION
+144B	TXT VDU DISABLE
+1451	TXT VDU ENABLE
+146B	Default Steuerzeichen Sprünge
+14CB	TXT GET CONTROLS
+14D8	07 Klingel
+14E3	16 Transparentmode Ein/Aus
+14E8	1C =INK Befehl
+14F1	ID =BORDER Befehl
+14F8	1A Fenster definieren
+1504	19 = SYMBOL Befehl
+150A	08 CRSR LEFT
+150F	09 CRSR RGHT
+1514	0A CRSR DOWN
+1519	0B CRSR UP
+152A	1E CRSR HOME
+1530	0D CRSR auf Zeilenanfang
+1538	IF = LOCATE Befehl
+1540	TXT CLEAR WINDOW
+154F	10 Zeichen auf CRS Pos löschen
+1556	14 Fenster ab CRS Pos löschen
+156D	13 Fenster bis CRS Pos löschen
+1584	12 Zeile ab CRS Pos löschen
+158E	11 Zeile bis CRS Pos löschen
+15B0	GRA INITIALISE
+15DF	GRA RESET
+15F1	GRA MOVE RELATIVE
+15FC	GRA ASK CURSOR
+1612	GRA GET ORIGIN
+161A	phys Startposition holen
+161D	phys Zielpos holen f Cur setzen
+1657	Add lfd Koord. + rel Koord.
+1734	GRA WIN WIDTH
+1779	GRA WIN HEIGHT
+17A6	GRA GET W WIDTH
+17BC	GRA GET W HEIGHT
+17C5	GRA CLEAR WINDOW
+17F6	GRA SET PEN
+17FD	GRA SET PAPER
+1804	GRA GET PEN
+180A	GRA GET PAPER
+1810	GRA PLOT RELATIVE
+1813	GRA PLOT ABSOLUTE
+1816	GRA PLOT
+1824	GRA TEST RELATIVE
+1827	GRA TEST ABSOLUTE
+182A	GRA TEST
+1836	GRA LINE RELATIVE
+1839	GRA LINE ABSOLUTE
+183C	GRA LINE
+1945	GRA WR CHAR
+19E0	KM INITIALISE
+1A1E	KM RESET
+1A3C	KM WAIT CHAR
+1A42	KM READ CHAR
+1A81	KM EXP BUFFER CONT'D
+1AB3	Default Exp String
+1ABD	KM SET EXPAND
+1AE5	Exp Buffer aufräumen
+1B22	Platz f. neuen Exp String?
+1B2E	KM GET EXPAND
+1B3E	Adr. Exp String nach de
+1B56	KM WAIT KEY
+1B5C	KM READ KEY
+1BB3	KM GET STATE
+1BB7	Update Key State Map
+1C2F	KM TEST BREAK
+1C5C	KM GET JOYSTICK
+1C69	KM GET DELAY
+1C6D	KM SET DELAY
+1C71	KM ARM BREAK
+1C82	KM DISARM BREAK
+1C90	KM BREAK EVENT
+1CBD	KM TEST KEY
+1CCD	der Key# entspr. Bit holen
+1CE5	Bit Masken
+1D3E	KM GET TRANSLATE
+1D43	KM GET SHIFT
+1D48	KM GET CONTROL
+1D4B	Get Key Table
+1D52	KM SET TRANSLATE
+1D57	KM SET SHIFT
+1D5C	KM SET CONTROL
+1D5F	Set Key Table
+1D69	Key Translation Table
+1DB9	Key SHIFT Table
+1E09	Key CTRL Table
+1E68	SOUND RESET
+1ECB	SOUND HOLD
+1EE6	SOUND CONTINUE
+1F03	Sound Event
+1F61	Scan Sound Queues
+1F9F	SOUND QUEUE
+204A	SOUND RELEASE
+206C	SOUND CHECK
+2089	SOUND ARM EVENT
+2273	Lautstärke setzen
+2338	SOUND AMPL ENVELOPE
+233D	SOUND TONE ENVELOPE
+2340	Hüllhurve kopieren
+2349	SOUND A ADDRESS
+234E	SOUND T ADDRESS
+2351	Hüllkurve Adresse holen
+2370	CAS INITIALISE
+237F	CAS SET SPEED
+238E	CAS NOISY
+2392	CAS IN OPEN
+23AB	CAS OUT OPEN
+23AF	CAS Open
+23FC	CAS IN CLOSE
+2401	CAS IN ABANDON
+2415	CAS OUT CLOSE
+242E	CAS OUT ABANDON
+2435	CAS IN CHAR
+245B	CAS OUT CHAR
+248B	Check Input Buffer Status
+248E	Check Buffer Status
+2496	CAS TEST EOF
+249A	CAS RETURN
+24AB	CAS IN DIRECT
+24EA	CAS OUT DIRECT
+2528	CAS CATALOG
+253F	File Header lesen
+271F	CAS Meldung (# in b) ausgeben
+2780	CAS Meldung (1 Zeichen) ausg.
+27C5	Kassetten- Meldungen
+2836	CAS READ
+283F	CAS WRITE
+2851	CAS CHECK
+2873	Motor Ein & Keyb. öffnen
+29CD	CAS Input RD DATA & Test ESC
+2A37	CAS Output WR DATA
+2A4B	CAS START MOTOR
+2A4F	CAS STOP MOTOR
+2A51	CAS RESTORE MOTOR
+2A98	EDIT
+2AC6	EDIT Sprung ausführen
+2AE0	EDIT Sprungtabelle 1
+2B1C	EDIT Sprungtabelle 2
+2B2B	KLINGEL
+2B2F	CRSR UP
+2B33	CRSR DWN
+2B37	CRSR RGHT
+2B3B	CRSR LEFT
+2B42	ESC
+2B61	*BREAK*-Meldung
+2B69	ENTER
+2B75	CRSR RGHT (Puffer)
+2B7E	CRSR DWN (Puffer)
+2B89	CTRL & CRSR RGHT
+2B92	CTRL & CRSR DWN
+2BAA	CRSR LEFT (Puffer)
+2BB3	CRSR UP (Puffer)
+2BBD	CTRL & CRSR LEFT
+2BC7	CTRL & CRSR UP
+2BF9	CTRL & TAB (Flip Insert)
+2C01	Zeichen einfügen
+2C3D	DEL
+2C4A	CLR
+2C98	SHFT & CRSR RGIIT
+2C9D	SHFT & CRSR LEFT
+2CA2	SHFT & CRSR UP
+2CA7	SHFT & CRSR DWN
+2CEA	COPY
+2DD9	Zeichen von Keyboard
+2DF6	EDIT Sprungadr holen
+2E18	FLO Variable von (de)=>(hl) kopieren
+2E29	FLO Int Flo=>Flo
+2E55	FLO 4—Byte—Wert => Flo
+2E5E	FLO 4-Byte-Wert * 256 => Flo
+2E66	FLO Flo => Int
+2E8E	FLO Flo => Int
+2EA1	FLO FIX
+2EAC	FLO INT
+2EB6	FLO
+2F94	FLO RND Init
+2FA1	FLO Set RND Seed
+2FB7	FLO RND
+2FD1	FLO Zahl mit 10la multiplizieren.
+2FE6	FLO Letzten RND-Wert holen.
+300F	FLO LOG1O
+3014	FLO LOG
+3090	FLO EXP
+310A	FLO SQR
+310D	FLO Potenzierung
+31A3	FLO PI
+31AE	FLO DEG/RAD
+31B2	FLO COS
+31BC	FLO SIN
+3231	FLO TAN
+3241	FLO ATN
+3337	FLO Subtraktion
+333B	FLO Subtraktion
+333F	FLO Addition
+3415	FLO Multiplikation
+349E	FLO Division
+3578	FLO Zahl mit 21a multiplizieren.
+359A	FLO Vergleich
+35E8	FLO SGN
+35F8	FLO Vorzeichenwechsel
+3708	INT
+370E	INT
+3715	INT Vorzeichen in b	übernehmen.
+3728	INT Addition
+3730	INT Subtraktion
+3731	INT Subtraktion
+3739	INT Multiplikation mit Vorzeichen
+3750	INT Multiplikation ohne Vorzeichen
+377A	INT Division mit Vorzeichen
+3781	INT MOD
+378C	INT Division ohne Vorzeichen
+37D4	INT Vorzeichenwechsel
+37E0	INT SGN
+37E9	INT Vergleich
+
+; UPPER ROM
+
+C006	BASIC - Initialisierung
+C03F	'BASIC 1.0', LF, LF
+C052	BASIC-Befehl EDIT
+C064	READY-Modus
+C0CC	'Ready', LF
+C0D3	AUTO-Modus löschen
+C0D6	AUTO-Modus setzen
+C0DF	BASIC-Befehl AUTO
+C12B	BASIC-Befehl NEW
+C132	BASIC-Befehl CLEAR
+C13E	Programm und Variablen löschen
+C18C	Variablen löschen
+C1D0	Streamnummer holen
+C1E3	Streamnummer testen
+C20A	BASIC-Befehl PAPER
+C212	BASIC-Befehl PEN
+C221	BASIC-Befehl BORDER
+C22A	BASIC-Befehl INK
+C23C	Argument(e) <32 holen
+C24C	Argument <16 holen
+C24F	BASIC-Befehl MODE
+C25A	BASIC-Befehl CLS
+C262	BASIC-Funktion VPOS
+C276	BASIC—Funktion POS
+C290	aktuelle Spaltennummer holen
+C2D2	BASIC-Befehl LOCATE
+C2E1	BASIC-Befehl WINDOW
+C2FD	WINDOW SWAP
+C312	Argument < 8 holen
+C319	BASIC-Befehl TAG
+C320	BASIC-Befehl TAGOFF
+C327	2 8-Bit—Werte ungleich Null holen
+C337	String auf Stream Null ausgeben
+C341	String ausgeben
+C34E	Linefeed ausgeben
+C386	Bildschirm initialisieren
+C3A8	CR & LF ausgeben
+C3B5	Zeichen auf Drucker ausgeben
+C3DF	aktuelle Druckerposition holen
+C3E3	BASIC-BEFEHL WIDTH
+C417	reservierte Variable EOF
+C424	ein Zeichen vom Eingabestrom holen
+C42C	auf ein Zeichen von Tastatur warten
+C439	Tastatur lesen
+C453	Unterbrechnung durch ’Break’ erlauben
+C45E	Break-Event Routine
+C46F	Warten auf Tastendruck nach ’ESC’
+C48C	BASIC-Befehl ORIGIN
+C4C6	BASIC-Befehl DRAW
+C4CB	BASIC-Befehl DRAWR
+C4D0	BASIC-Befehl PLOT
+C4D5	BASIC-Befehl PLOTR
+C4E9	BASIC-Funktion TEST
+C4EE	BASIC-Funktion TESTR
+C505	BASIC-Befehl MOVE
+C50A	BASIC-Befehl MOVER
+C51A	2 Integerargumente holen
+C529	BASIC-Befehl FOR
+C5FB	BASIC-Befehl NEXT
+C632	offene FOR-Next-Schleife suchen
+C6C7	BASIC-Befehl IF
+C6E8	BASIC-Befehl GOTO
+C6ED	BASIC-Befehl GOSUB
+C70F	BASIC-Befehl RETURN
+C72E	GOSUB auf BASIC-Stack suchen
+C747	BASIC-Befehl WHILE
+C776	BASIC-Bafehl WEND
+C7E3	BASIC-Befehl ON
+C807	Event-Verarbeitung
+C8CB	BASIC-Befehl ON BREAK
+C8E1	BASIC-Befehl DI
+C8E7	BASIC-Befehl EI
+C8ED	SOUND— und Event—Reset
+C940	BASIC-Befehl ON SO
+C95D	Adresse der Sound-Queue berechnen
+C971	BASIC-Befehl AFTER
+C979	BASIC-Befehl EVERY
+C99F	BASIC-Funktion REMAIN
+C9B1	Adresse des Event-Blocks berechnen
+C9C5	zugehöriges NEXT suchen
+CA18	zugehöriges WEND suchen
+CA3B	Eingabezeile holen
+CA43	Zeile editieren
+CA4C	Eingabezeile von Kassette holen
+CA84	Fehlernummer und -Zeile löschen
+CA8F	BASIC-Befehl ERROR
+CA94 Fehlermeldung ausgeben
+CB23 ’Undefined line'
+CB4F 'Break’, ’ in ’
+CB5A BASIC-Befehl STOP
+CB65	BASIC - Befehl END
+CBC0 BASIC-Befehl CONT
+CBE5	ON ERROR
+CBF8	ON ERROR GOTO 0
+CC03	BASIC—Befehl RESUME
+CC45	Zeiger auf Fehlermeldung setzen
+CC5B	Fehlermeldungen
+CE67	8-Bit-Wert holen
+CE6D	8-Bit-Wert ungleich Null holen
+CE7C	16-Bit-Wert 0 bis 32767 holen
+CE86	Integerwert —32768 bis +32767 holen
+CE91	16-Bit-Wert -32768 bis +65535 holen
+CE9F	Stringausdruck holen, Parameter bereitstellen
+CEA5	Stringausdruck holen
+CEB0	Zeilennummernbereich holen
+CEE1	Zeilennummer nach de holen
+CEFB	Ausdruck holen
+CF07	Term holen
+CF30	arithmetische Operatoren
+CF59	Vergleichsoperatoren
+CF81	Tabelle der BASIC-Operatoren
+CFA9	arithmetischer Vergleich
+CFB9	negatives Vorzeichen
+CFC2	BASIC-Operator NOT
+CFCE	Ausdruck holen
+D00D	Variable holen
+D02C	numerische Konstante holen
+D070	Ausdruck in Klammern holen
+D080	Funktionsberechnung
+D0CA	Adressen der reservierten Variablen
+D0DC	reservierte Variable ERR
+D0E5	reservierte Variable TIME
+D0EE	reservierte Variable ERL
+D0F4	reservierte Variable HIMEM
+D0FA	Variablenpointer, 'Klammeraffe'
+D107	reservierte Variable XPOS
+D10F	reservierte Variable YPOS
+D117	BASIC-Befehl DEF
+D130	BASIC-Funktion FN
+D190	Adressen der BASIC-Funktionen
+D1EA	BASIC - Funktion MIN
+D1EE	BASIC-Funktion MAX
+D219	BASIC-Funktion ROUND
+D246	BASIC-Befehl CAT
+D256	BASIC-Befehl OPENOUT
+D25F	BASIC-Befehl OPENIN
+D298	BASIC-Befehl CLOSEIN
+D2A1	BASIC-Befehl CLOSEOUT
+D2AD	Kassetten-I/O abbrechen
+D2C0	BASIC-Befehl SOUND
+D30D	falls vorhanden 8-Bit-Wert holen
+D31E	BASIC-Befehl RELEASE
+D329	BASIC—Funktion SQ
+D341	Argument -128 bis +127 holen
+D34E	BASIC-Befehl ENV
+D385	BASIC—Befehl ENT
+D3FF	Argument 0 bis 4095 holen
+D409	BASIC-Funktion INKEY
+D423	BASIC—Funktion JOY
+D439	BASIC—Befehl KEY
+D456	KEY DEF
+D494	BASIC-Befehl SPEED
+D4AB	SPEED KEY & INK
+D4C3	SPEED WRITE
+D4DB	reservierte Variable PI
+D4E7	BASIC-Befehl DEG
+D4EB	BASIC-Befehl RAD
+D4EF	BASIC-Funktion SQR
+D4F4	BASIC-Operator T
+D519	arithmetische Funktion aufrufen
+D520	BASIC-Funktion EXP
+D525	BASIC-Funktion LOGIO
+D52A	BASIC-Funktion LOG
+D52F	BASIC-Funktion SIN
+D534	BASIC-Funktion COS
+D539	BASIC—Funktion TAN
+D53E	BASIC-Funktion ATN
+D53E	'?Random seed’
+D559	BASIC-Befehl RANDOMIZE
+D584	BASIC- Funktion RND
+D5AE	Variablenzeiger rücksetzen
+D5D2	Flag für FN löschen
+D5EA	Tabellenadresse für Array berechnen
+D5FC	Variablentypen A-Z auf ’Real’
+D614	BASIC-Befehl DEFSTR
+D618	BASIC - Befehl DEFINT
+D61C	BASIC-Befehl DEFREAL
+D654	BASIC-Befehl LET
+D67D	BASIC- Befehl DIM
+D686	BASIC-Variable suchen
+D690	Variablenadresse holen
+D708	Array suchen
+D7B5	Variablendimensionierung
+D7DB	Test auf Dimensionierte Variable
+D906	Variablenname holen
+D97F	Variablentyp feststellen
+D999	Arraytabelle updaten
+D9C0	BASIC-Befehl ERASE
+D9CC	Array löschen
+DAF8	BASIC-Befehl LINE
+DB1A	Eingabe vom aktiven Gerät holen
+DB2B	BASIC-Befehl INPUT
+DB47	Eingabe holen und umwandeln
+DB77	’?Redo from start’
+DBAD	Eingabe von Tastatur holen
+DCD9	BASIC-Befehl RESTORE
+DCEB	BASIC-Befehl READ
+DD37	Test auf nachfolgendes Zeichen
+DD3F	Blanks überlesen
+DD4A	Test auf Ende des Statements
+DD55	nächstes Zeichen auf Komma testen
+DD61	Blank, TAB und LF überlesen
+DD71	Interpreterschleife
+DDAB	BASIC—Befehl ausführen
+DDD2	aktuelle Zeilenadresse holen
+DDD6	aktuelle Zeilenadresse holen und Test auf Direktmodus
+DDE2	BASIC-Befehl TRON
+DDE6	BASIC-Befehl TROFF
+DDEB	TR A CE—Routine
+DE01	Adressen der BASIC-Befehle
+DEE1	Zeichen aus Eingabepuffer holen
+DFDC	Tabelle der BASIC—Befehle mit Zeilennummer
+E0F7	BASIC-Befehl LIST
+E10D	BASIC-Zeilen bc - de listen
+E145	Zeichen aus Puffer ausgeben
+E155	Bildschirmausgabe
+E163	BASIC-Zeile in Puffer listen
+E277	Ein-Byte-Zahl ausgeben
+E27D	Zwei-Byte-Zahl ausgeben
+E288	Zeilennummer ausgeben
+E2A3	Binärzahl ausgeben
+E2AE	Hexzahl ausgeben
+E2C8	Fließkommazahl ausgeben
+E354	Adressen der BASIC-Befehlsworte
+E388	Tabelle der BASIC-Befehlsworte
+E64B	Tabelle der BASIC-Operatoren
+E676	Programmzeiger löschen
+E69D	Zeilenadresse durch Zeilennummer ersetzen
+E6BC	Eingabezeile in Interpreterkode wandeln
+E6D2	Statement in Interpreterkode wandeln
+E728	BASIC-Befehl DELETE
+E767	Zeilenadresse holen
+E79A	BASIC-Zeile suchen
+E7DF	BASIC-Befehl RENUM
+E8C1	Test auf indizierte Variable
+E8EF	BASIC-Befehl DATA
+E8F3	BASIC — Befehle ELSE, REM und 1
+E9BD	BASIC-Befehl RUN
+E9F6	BASIC-Befehl LOAD
+EA3C	BASIC-Befehl CHAIN
+EAA6	BASIC-Befehl MERGE
+EC09	BASIC-Befehl SAVE
+EC3D	SAVE ,P
+EC5C	SAVE ,B
+EC87	SAVE ,A
+EE61	ASCII Ziffer nach binär wandeln
+EE79	Integerzahl hl ausgeben
+EE82	Integerzahl nach ASCII wandeln
+EE9D	Zahl nach ASCII wandeln
+EE9F	Zahl formatieren
+F114	Umwandlung nach binär
+F119	Umwandlung nach hex
+F158	BASIC-Funktion PEEK
+F15F	BASIC-Befehl POKE
+F16D	BASIC-Funktion INP
+F177	BASIC-Befehl OUT
+F17D	BASIC-Befehl WAIT
+F194	16-Bit-Wert und 8-Bit-Wert holen
+F1A0	BASIC-Befehlserweiterung suchen
+F1BA	BASIC-Befehl CALL
+F1F2	TAB-Stops initialisieren
+F1F6	BASIC-Befehl ZONE
+F1FD	BASIC-Befehl PRINT
+F25C	PRINT ,
+F277	PRINT SPC
+F280	PRINT TAB
+F2A0	Integerwert in Klammern holen
+F2C4	PRINT USING
+F3BA	auf Formatierungszeichen prüfen
+F47B	BASIC-Befehl WRITE
+F4C4	Speicher konfigurieren
+F4EF	BASIC-Befehl MEMORY
+F501	Platz für zu ladendes Programm schaffen
+F51D	Länge des Stringbereichs berechnen
+F52C	Programm- und Variablenzeiger um bc erhöhen
+F58E	BASIC-Stack initialisieren
+F5A0	Platz im BASIC—Stack freigeben
+F5B0	Platz im BASIC-Stack reservieren
+F5D1	Platz für String reservieren
+F5E6	Test auf Platz im Stringbereich
+F5F8	Platz im Variablenbereich reservieren
+F618	Test auf Platz im Variablenbereich
+F628	freien Speicherplatz berechnen
+F69D	BASIC-Befehl SYMBOL
+F6CD	SYMBOL AFTER
+F7CB	String lesen
+F828	String ausgeben
+F834	BASIC-Funktion LOWERS
+F839	Umwandlung Groß- in Kleinbuchstaben
+F842	BASIC-Funktion UPPERS
+F863	Stringaddition
+F897	Stringvergleich
+F8BA	BASIC-Funktion BINS
+F8C4	BASIC-Funktion HEXS
+F8CE	Argumente für BINS und HEXS holen
+F8EA	BASIC-Funktion DECS
+F91E	BASIC-Funktion STRS
+F93C	BASIC-Funktion LEFTS
+F943	BASIC-Funktion RIGHTS
+F94B	BASIC—Funktion MIDS
+F993	BASIC-Befehl MIDS
+F9E9	String und 8-Bit-Wert holen
+F9FB	3. Argument für MIDS holen
+FA0A	BASIC-Funktion LEN
+FA10	BASIC-Funktion ASC
+FA16	BASIC-Funktion CHRS
+FA24	reservierte Variable INKEYS
+FA36	BASIC-Funktion STRINGS
+FA57	BASIC-Funktion SPACES
+FA70	ASCII - Kode holen
+FA77	BASIC-Funktion VAL
+FA92	Umwandlung nach Integer und Test < 256
+FAA1	BASIC-Funktion INSTR
+FBB3	Descriptorstack initialisieren
+FBDA	Stringparameter holen
+FC19	Platz reservieren, Descriptor ablegen
+FC2D	BASIC-Funktion FRE
+FC3E	Garbage Collection
+FCCC	BASIC-Operator ' + '
+FCE1	BASIC - Operator 1 - ’
+FCF5	BASIC - Operator V
+FD09	arithmtischer Vergleich
+FD12	BASIC-Operator 7’
+FD37	BASIC-Operator Backslash’
+FD49	BASIC-Operator MOD
+FD58	BASIC-Operator AND
+FD63	BASIC-Operator OR
+FD6D	BASIC-Operator XOR
+FD85	BASIC-Funktion ABS
+FD89	Vorzeichen wechseln
+FDE8	BASIC-Funktion FIX
+FDED	BASIC-Funktion INT
+FE4F	Integeroperanden nach Fließkomma wandeln
+FE6A	Integerzahl nach Fließkomma wandeln
+FE8D	BASIC—Funktion CINT
+FEC2	BASIC-Funktion UNT
+FEEC	BASIC—Funktion CREAL
+FF02	BASIC-Funktion SGN
+FF0A	Akkuinhalt als Integerzahl übernehmen
+FF0D	Integerzahl in hl übernehmen
+FF16	Variablentyp auf Fließkomma setzen
+FF23	Variablentyp holen
+FF27	Test auf String
+FF2D	numerisches Ergebnis holen
+FF3C	Test auf String, sonst ’Type mismatch’
+FF45	Test auf String
+FF53	Ergebnis auf BASIC-Stack ablegen
+FF62	Variable nach (hl) kopieren
+FF71	Test auf Buchstaben
+FF8A	Klein- in Großbuchstaben umwandeln
+FF93	Tabelle durchsuchen
+FFAA	Tabelle durchsuchen
+FFB8	Vergleich hl <> de
+FFBE	Vergleich hl <> bc
+FFC4	de := de — hl
+FFCF	hl: = hl - de
+FFDA	bc : = hl - de
+FFE7	hl: = hl — bc
+FFF2	Blocktransfer ldir
+FFF5	Blocktransfer lddr
+FFF8	jp (hl)
+FFF9	jp (bc)
+FFFB	jp (de)
+
