@@ -5,6 +5,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="z80_reference.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="z80_reference.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Assembler\Assembler.csproj" />
     <ProjectReference Include="..\Emulator\Emulator.csproj" />
   </ItemGroup>
