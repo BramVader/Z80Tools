@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -9,114 +9,31 @@ namespace Assembler
 {
     public abstract class MacroAssembler
     {
-        public class Symbol
+        private static readonly Regex lineRegex = new(@"^\s*([^\s:]+:)?\s*(\.?\w+)?\s*(\S+)?\s*(;.*)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        private static readonly Dictionary<string, TokenType> macroMap = new()
         {
-            public int? Value { get; set; }
+            ["MACRO"] = TokenType.Macro,
+            ["REPT"] = TokenType.Rept,
+            ["IRP"] = TokenType.Irp,
+            ["IRPC"] = TokenType.Irpc
+        };
 
-            public bool Public { get; set; }    // When declared with double colon (::)
-
-            public string Name { get; set; }
-        }
-
-        public class Macro
+        public async Task Assemble(StreamReader sr)
         {
-            public string Name { get; set; }
-            public List<string> ArgNames { get; set; }
-        }
-
-        public enum Mode
-        {
-            Default,
-            BlockComment
-        }
-
-        public class State
-        {
-            private List<string> blockCommentCollector = new List<string>();
-            private readonly Dictionary<string, Symbol> symbols = new Dictionary<string, Symbol>();
-            private readonly Dictionary<string, Macro> macros = new Dictionary<string, Macro>();
-
-            public int LineNr { get; set; }
-
-            public int Address { get; set; }
-
-            public int Radix { get; set; } = 10;
-
-            public Mode Mode { get; set; }
-
-            public void AddLineToBlockComment(string st)
+            var state = new State();
+            var outputCollector = new OutputCollector();
+            await Initialize();
+            while (!sr.EndOfStream)
             {
-                blockCommentCollector.Add(st);
+                state.LineNr++;
+                string line = await sr.ReadLineAsync();
+                AssembleLine(line, state, outputCollector);
             }
-
-            public string FinalizeBlockComment()
-            {
-                string st = blockCommentCollector.ToString();
-                blockCommentCollector.Clear();
-
-                return st;
-            }
-
-            public void SetLabel(string name) =>
-                SetLabel(name, Address);
-
-            public void SetLabel(string name, int address)
-            {
-                bool isPublic = name.EndsWith("::");
-                name = name.TrimEnd(':');
-                isPublic |= symbols.TryGetValue(name, out var lb) && lb.Public;
-                symbols[name] = new Symbol { Value = address, Public = isPublic, Name = name };
-            }
-
-            public int? GetSymbol(string name)
-            {
-                return symbols.TryGetValue(name, out Symbol value) ? value.Value : null;
-            }
-
-            public void SetPublic(string name)
-            {
-                if (!symbols.TryGetValue(name, out var lb))
-                {
-                    lb = new Symbol { Name = name };
-                }
-                lb.Public = true;
-            }
-
-            public Macro CheckMacro(string name)
-            {
-                return macros.TryGetValue(name, out var macro) ? macro : null;
-            }
-
-            public void SetMacro(string name, string args)
-            {
-                var macro = new Macro
-                {
-                    Name = name
-                };
-                macros.Add(name, macro);
-            }
-        }
-
-        protected class OutputCollector
-        {
-            public void AddComment(string st)
-            {
-
-            }
-
-            public void Emit(byte v)
-            {
-
-            }
-        }
-
-        public Task Assemble(StreamReader sr)
-        {
-            return Assemble(sr, new State(), new OutputCollector());
         }
 
         // Trims the line. When there's whitespace in strings, they will
-        // be replaced by their ASCII value + 128 (137 and 160)
+        // be replaced by their ASCII values 254 (tab) and 255 (space)
         private static string SantizeLine(string line)
         {
             line = line.Trim();
@@ -156,8 +73,6 @@ namespace Assembler
             return line;
         }
 
-        private static readonly Regex lineRegex = new(@"^\s*([^\s:]+:)?\s*(\.?\w+)?\s*(\S+)?\s*(;.*)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
         protected abstract bool TryOpcode(State state, OutputCollector outputCollector, string opcode, string operands);
 
         protected abstract Task Initialize();
@@ -167,114 +82,153 @@ namespace Assembler
             if (String.IsNullOrEmpty(data))
                 throw new InvalidOperationException($"Integer expression expected in line {state.LineNr}");
 
-            var tokens = Tokenizer.Tokenize(data, state.Radix);
-
-            // A numeric constant
-            if (Char.IsDigit(data[0]))
-            {
-                char last = data[^1];
-                int radix = Char.ToUpper(last) switch
-                {
-                    'B' => 2,
-                    'D' => 10,
-                    'H' => 16,
-                    _ => 0
-                };
-                if (radix != 0)
-                {
-                    data = data[0..^1];
-                }
-                else
-                {
-                    radix = state.Radix;
-                }
-                return Convert.ToInt32(data, radix);
-            }
-
-            return 0;
-            //throw new InvalidOperationException($"Cannot parse integer in line {state.LineNr}");
+            var fun = Compiler.Compile<int>(data, state.Radix);
+            return fun(state);
         }
 
-        private async Task Assemble(StreamReader sr, State state, OutputCollector outputCollector)
+        protected static int[] ParseIntArray(State state, string data)
         {
-            await Initialize();
-            while (!sr.EndOfStream)
+            if (String.IsNullOrEmpty(data))
+                return Array.Empty<int>();
+
+            var fun = Compiler.Compile<int[]>(data, state.Radix);
+            return fun(state);
+        }
+
+
+        private void ExpandMacro(Macro macro, string operands, State state, OutputCollector outputCollector)
+        {
+            var tokens = Tokenizer.Tokenize(operands, state.Radix);
+            foreach (var line in macro.Lines)
             {
-                state.LineNr++;
-                string line = await sr.ReadLineAsync();
-                if (String.IsNullOrWhiteSpace(line))
-                    continue;
-
-                if (state.Mode == Mode.BlockComment)
-                {
-                    state.AddLineToBlockComment(line);
-                    continue;
-                }
-
-                if (line.StartsWith(';'))
-                {
-                    outputCollector.AddComment(line);
-                    continue;
-                }
-
-                line = SantizeLine(line);
-
-                var match = lineRegex.Match(line);
-                if (!match.Success)
-                    throw new InvalidOperationException($"Syntax error at line {state.LineNr}");
-                string label = match.Groups[1].Value;
-                string opcode = match.Groups[2].Value.ToUpper();
-                string operands = match.Groups[3].Value.Replace((char)254, '\t').Replace((char)255, ' ');
-                string comment = match.Groups[4].Value;
-
-                if (label != String.Empty)
-                {
-                    state.SetLabel(label);
-                }
-
-                var macro = state.CheckMacro(opcode);
-                if (macro != null)
-                {
-
-                    continue;
-                }
-
-                switch (opcode)
-                {
-                    case ".TITLE":
-                    case "ASEG":
-                        // TODO
-                        break;
-
-                    case ".RADIX":
-                        if (!Int32.TryParse(operands, out int rdx) || rdx < 2 || rdx > 16)
-                            throw new InvalidOperationException($"Invalid value {operands} for .RADIX");
-                        state.Radix = rdx;
-                        break;
-
-                    case "ORG":
-                        state.Address = ParseInt(state, operands);
-                        break;
-
-                    case "DS":
-                    case "DEFS":
-                        state.Address += ParseInt(state, operands);
-                        break;
-
-                    case "DB":
-
-
-                    case "PUBLIC":
-                        state.SetPublic(operands);
-                        break;
-                    default:
-                        if (!TryOpcode(state, outputCollector, opcode, operands))
-                        {
-                            throw new InvalidOperationException($"Unknown opcode {opcode} in line {state.LineNr}");
-                        }
-                        break;
-                }
+                AssembleLine(line, state, outputCollector);
             }
         }
+
+
+        private void AssembleLine(string line, State state, OutputCollector outputCollector)
+        {
+            if (String.IsNullOrWhiteSpace(line))
+                return;
+
+            if (state.Mode == Mode.BlockComment)
+            {
+                state.AddLineToBlockComment(line);
+                return;
+            }
+
+            if (line.StartsWith(';'))
+            {
+                outputCollector.AddComment(line);
+                return;
+            }
+
+            line = SantizeLine(line);
+
+            var match = lineRegex.Match(line);
+            string label = match.Groups[1].Value;
+            string opcode = match.Groups[2].Value.ToUpper();
+            string operands = match.Groups[3].Value.Replace((char)254, '\t').Replace((char)255, ' ');
+            string comment = match.Groups[4].Value;
+
+            if (macroMap.TryGetValue(opcode, out TokenType macroType))
+            {
+                state.BeginMacro(label.TrimEnd(':'), operands, macroType);
+            }
+            else if (opcode == "ENDM")
+            {
+                state.CurrentMacro.AddLine(line);
+
+                // If macro has no name apply it immediately (inline)
+                if (String.IsNullOrWhiteSpace(state.CurrentMacro.Name))
+                {
+                    ExpandMacro(state.CurrentMacro, operands, state, outputCollector);
+                }
+
+                state.EndMacro();
+                return;
+            }
+
+            if (state.CurrentMacro != null)
+            {
+                state.CurrentMacro.AddLine(line);
+                return;
+            }
+
+            if (!match.Success)
+                throw new InvalidOperationException($"Syntax error at line {state.LineNr}");
+
+            var macro = state.GetMacro(opcode);
+            if (macro != null)
+            {
+                ExpandMacro(macro, operands, state, outputCollector);
+            }
+
+            if (label != String.Empty && label.EndsWith(':'))
+            {
+                state.SetLabel(label, state.SymbolType);
+            }
+
+            switch (opcode)
+            {
+                case ".TITLE":
+                    // TODO
+                    break;
+
+                case "ASEG":
+                    state.SymbolType = SymbolType.Absolute;
+                    break;
+
+                case "CSEG":
+                    state.SymbolType = SymbolType.CodeRelative;
+                    break;
+
+                case "DSEG":
+                    state.SymbolType = SymbolType.DataRelative;
+                    break;
+
+                case ".RADIX":
+                    if (!Int32.TryParse(operands, out int rdx) || rdx < 2 || rdx > 16)
+                        throw new InvalidOperationException($"Invalid value {operands} for .RADIX");
+                    state.Radix = rdx;
+                    break;
+
+                case "ORG":
+                    state.Address = ParseInt(state, operands);
+                    break;
+
+                case "EQU":
+                    state.SetSymbol(label, ParseInt(state, operands), true);
+                    break;
+
+                case "DS":
+                case "DEFS":
+                    state.Address += ParseInt(state, operands);
+                    break;
+
+                case "DB":
+                case "DEFB":
+                    var tokens = Tokenizer.Tokenize(operands, state.Radix);
+                    // TODO
+                    break;
+
+                case "DW":
+                case "DEFW":
+                    // TODO
+                    break;
+
+                case "PUBLIC":
+                    state.SetPublic(operands);
+                    break;
+
+                default:
+                    if (!String.IsNullOrEmpty(opcode) && !TryOpcode(state, outputCollector, opcode, operands))
+                    {
+                        throw new InvalidOperationException($"Unknown opcode {opcode} in line {state.LineNr}");
+                    }
+                    break;
+            }
+        }
+
     }
 }

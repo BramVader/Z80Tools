@@ -1,8 +1,8 @@
-﻿using System;
+﻿using Assembler;
+using Disassembler;
+using System;
 using System.Linq;
-using System.Collections.Generic;
-using System.Text;
-using Assembler;
+using Symbol = Disassembler.Symbol;
 
 namespace Z80Core
 {
@@ -33,14 +33,14 @@ namespace Z80Core
             return "0x" + w.ToString("X4");
         }
 
-        private readonly string[,] reg = new string[,] 
+        private readonly string[,] reg = new string[,]
         {
             { "B", "C", "D", "E", "H", "L", "(HL)", "A" },
             { "B", "C", "D", "E", "IXH", "IXL", "(IX d)", "A" },
             { "B", "C", "D", "E", "IYH", "IYL", "(IY d)", "A" }
         };
-        private readonly  string[,] rp = new string[,] 
-        { 
+        private readonly  string[,] rp = new string[,]
+        {
             {"BC", "DE", "HL", "SP" },
             {"BC", "DE", "IX", "SP" },
             {"BC", "DE", "IY", "SP" }
@@ -208,7 +208,7 @@ namespace Z80Core
                                     return new DisassemblyResult("LD", indirect() + ", A", memory, startAddr, address, name, comment);
                                 case 7:
                                     return new DisassemblyResult("LD", "A, " + indirect(), memory, startAddr, address, name, comment);
-                            }                            
+                            }
                             break;
                         case 3:
                             switch (q)
@@ -217,7 +217,7 @@ namespace Z80Core
                                     return new DisassemblyResult("INC", rp[prefix, p], memory, startAddr, address, name, comment);
                                 case 1:
                                     return new DisassemblyResult("DEC", rp[prefix, p], memory, startAddr, address, name, comment);
-                            }                            
+                            }
                             break;
                         case 4:
                             return new DisassemblyResult("INC", r(y), memory, startAddr, address, name, comment);
@@ -243,16 +243,16 @@ namespace Z80Core
                                 case 6:
                                     return new DisassemblyResult("SCF", memory, startAddr, address, name, comment);
                                 case 7:
-                                    return new DisassemblyResult("CCF", memory, startAddr, address, name, comment);          
-                            }                            
+                                    return new DisassemblyResult("CCF", memory, startAddr, address, name, comment);
+                            }
                             break;
                     }
                     break;
                 case 1:
                     if (opcode == 0x76)
                         return new DisassemblyResult("HALT", memory, startAddr, address, name, comment);
-                    return new DisassemblyResult("LD", 
-                        (prefix > 0 && z == 6 ? reg[0, y] : r(y)) + ", " + 
+                    return new DisassemblyResult("LD",
+                        (prefix > 0 && z == 6 ? reg[0, y] : r(y)) + ", " +
                         (prefix > 0 && y == 6 ? reg[0, z] : r(z)), memory, startAddr, address, name, comment);
                 case 2:
                     var aluv1 = alu[y].Split(' ');
@@ -410,7 +410,7 @@ namespace Z80Core
                                         }
                                         break;
                                     case 3: // FD prefix
-                                        
+
                                         break;
                                 }
                             break;
@@ -423,7 +423,7 @@ namespace Z80Core
                     break;
             }
 
-            return new DisassemblyResult("NOP", memory, startAddr, address, name, comment); 
+            return new DisassemblyResult("NOP", memory, startAddr, address, name, comment);
         }
     }
 }

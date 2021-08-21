@@ -23,7 +23,8 @@ namespace Assembler
             (5, new [] { TokenType.Eq, TokenType.Ne, TokenType.Lt, TokenType.Le, TokenType.Gt, TokenType.Ge }),
             (6, new [] { TokenType.Not }),
             (7, new [] { TokenType.And }),
-            (8, new [] { TokenType.Or, TokenType.Xor })
+            (8, new [] { TokenType.Or, TokenType.Xor }),
+            (9, new [] { TokenType.Comma })
         }
         .SelectMany(it => it.tokens, (row, tokenType) => (tokenType, row.prec))
         .ToDictionary(it => it.tokenType, it => it.prec);
@@ -37,14 +38,22 @@ namespace Assembler
             TokenType.Not
         };
 
-        [DebuggerDisplay("{Token.Type} - {Expression?.ToString() ?? \"<null>\"}")]
         private class TokenAndExpr
         {
             public Token Token { get; set; }
             public Expression Expression { get; set; }
+
+            public List<Expression> List { get; set; }
+
+            public override string ToString()
+            {
+                var val = Token.Value == null ? "" : ": " + Token.Value.ToString();
+                return $"{Token.Type}{val} - {Expression?.ToString() ?? "<null>"}";
+            }
         }
 
-        private static readonly MethodInfo stateGetSymbolMethod = typeof(MacroAssembler.State).GetMethod(nameof(MacroAssembler.State.GetSymbol));
+        private static readonly MethodInfo stateGetSymbolMethod = typeof(State).GetMethod(nameof(State.GetSymbol));
+        private static readonly MethodInfo stateGetLocationCounterMethod = typeof(State).GetMethod(nameof(State.GetLocationCounter));
         private static readonly MethodInfo nullableIntGetValueDefault = typeof(int?).GetMethod(nameof(Nullable<int>.GetValueOrDefault), Array.Empty<Type>());
 
         private static Expression GetSymbolExpression(ParameterExpression statePar, TokenAndExpr item)
@@ -69,13 +78,16 @@ namespace Assembler
                         nullableIntGetValueDefault
                     ),
                     TokenType.Number => Expression.Constant((int)item.Token.Value),
+                    TokenType.LocationCounter =>
+                        Expression.Call(statePar, stateGetLocationCounterMethod),
                     _ => throw new InvalidOperationException("Integer constant or symbol expected"),
+
                 };
             }
             return item.Expression;
         }
 
-        private static Dictionary<TokenType, Func<Expression, Expression, BinaryExpression>> tokenTypeMapper = new()
+        private static readonly Dictionary<TokenType, Func<Expression, Expression, BinaryExpression>> tokenTypeMapper = new()
         {
             [TokenType.Multiply] = Expression.Multiply,
             [TokenType.Divide] = Expression.Divide,
@@ -98,13 +110,14 @@ namespace Assembler
 
         public static Expression Compile(IEnumerable<Token> tokens, ParameterExpression statePar = null)
         {
-            string tokenName(TokenType type) => type.ToString().ToUpper();
+            static string tokenName(TokenType type) => type.ToString().ToUpper();
 
-            statePar ??= Expression.Parameter(typeof(MacroAssembler.State), "state");
+            statePar ??= Expression.Parameter(typeof(State), "state");
             var list = tokens.Select(it => new TokenAndExpr { Token = it }).ToList();
 
             // Eliminate brackets
-            int level = 0;
+            int level1 = 0;
+            int level2 = 0;
             int j = -1;
             for (int i = 0; i < list.Count; i++)
             {
@@ -112,13 +125,15 @@ namespace Assembler
                 switch (item.Token.Type)
                 {
                     case TokenType.OpenParen:
-                        if (++level == 1)
-                        {
+                        if (++level1 == 1)
                             j = i;
-                        }
+                        break;
+                    case TokenType.OpenListParen:
+                        if (++level2 == 1)
+                            j = i;
                         break;
                     case TokenType.CloseParen:
-                        if (level-- == 1)
+                        if (level1-- == 1)
                         {
                             var sublist = list.Skip(j + 1).Take(i - j - 1).Select(it => it.Token).ToList();
                             var expr = Compile(sublist, statePar);
@@ -127,10 +142,26 @@ namespace Assembler
                             list[i] = new TokenAndExpr { Token = new Token { Type = TokenType.None }, Expression = expr };
                         }
                         break;
+                    case TokenType.CloseListParen:
+                        if (level2-- == 1)
+                        {
+                            var sublist = list.Skip(j + 1).Take(i - j - 1).Select(it => it.Token).ToList();
+                            var expr = Compile(sublist, statePar);
+                            list.RemoveRange(j, i - j);
+                            i = j;
+                            list[i] = new TokenAndExpr
+                            {
+                                Token = new Token { Type = TokenType.None },
+                                Expression = expr is ConstantExpression cexpr && cexpr.Value == null
+                                    ? Expression.NewArrayBounds(typeof(object), Expression.Constant(0))
+                                    : expr
+                            };
+                        }
+                        break;
                 }
             }
 
-            for (int prec1 = 0; prec1 < 8; prec1++)
+            for (int prec1 = 0; prec1 < 10; prec1++)
             {
                 for (int i = 0; i < list.Count; i++)
                 {
@@ -176,6 +207,28 @@ namespace Assembler
                                 break;
 
                             /* All other binary expressions */
+                            case TokenType.Comma:
+                                var list1 = itemLeft.List ?? new List<Expression>() { GetWordExpression(statePar, itemLeft) };
+                                var list2 = itemRight.List ?? new List<Expression>() { GetWordExpression(statePar, itemRight) };
+                                list1.AddRange(list2);
+                                item.List = list1;
+                                break;
+
+                            case TokenType.And:
+                                if (itemLeft.Expression?.Type == typeof(bool) &&
+                                    itemRight.Expression?.Type == typeof(bool))
+                                    expr = Expression.AndAlso(itemLeft.Expression, itemRight.Expression);
+                                else
+                                    expr = Expression.And(GetWordExpression(statePar, itemLeft), GetWordExpression(statePar, itemRight));
+                                break;
+
+                            case TokenType.Or:
+                                if (itemLeft.Expression?.Type == typeof(bool) &&
+                                    itemRight.Expression?.Type == typeof(bool))
+                                    expr = Expression.OrElse(itemLeft.Expression, itemRight.Expression);
+                                else
+                                    expr = Expression.Or(GetWordExpression(statePar, itemLeft), GetWordExpression(statePar, itemRight));
+                                break;
 
                             default:
                                 if (!tokenTypeMapper.TryGetValue(item.Token.Type, out var func))
@@ -186,13 +239,37 @@ namespace Assembler
                         }
                         item.Expression = expr;
                         list.RemoveAt(i + 1);
-                        if (!isUnary) list.RemoveAt(i - 1);
+                        if (!isUnary)
+                        {
+                            list.RemoveAt(i - 1);
+                            i--;
+                        }
                     }
                 }
             }
 
-            return list[0].Expression;
+            if (list.Count > 1)
+                throw new InvalidOperationException("Expression not terminated correctly");
+            if (list.Count == 0)
+                return Expression.Constant(null, typeof(object[]));
+            if (list[0].List != null)
+                return
+                    Expression.NewArrayInit(typeof(object), list[0].List.Select(
+                        // Apply boxing where needed
+                        it => it.Type != typeof(object) ? Expression.Convert(it, typeof(object)) : it
+                    ));
+            if (list[0].Expression != null)
+                return list[0].Expression;
+            return GetWordExpression(statePar, list[0]);
         }
 
+        public static Func<State, T> Compile<T>(string exprString, int radix)
+        {
+            var tokens = Tokenizer.Tokenize(exprString, radix);
+            var statePar = Expression.Parameter(typeof(State), "state");
+            var expr = Compile(tokens, statePar);
+            var lambda = Expression.Lambda<Func<State, T>>(expr, statePar);
+            return lambda.Compile();
+        }
     }
 }

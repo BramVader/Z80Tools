@@ -1,6 +1,7 @@
 ﻿using Assembler;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -14,6 +15,7 @@ namespace Z80Core
     {
         private static ILookup<string, Instruction> instructions;
 
+        [DebuggerDisplay("{Opcode} {Operands}")]
         private class Instruction
         {
             public string Opcode { get; set; }
@@ -33,9 +35,9 @@ namespace Z80Core
         }
 
         /* (HL) -> null because it is mapped separately */
-        static string[] regs = new[] { "B", "C", "D", "E", "H", "L", null /* (HL) */, "A" };
+        static readonly string[] regs = new[] { "B", "C", "D", "E", "H", "L", null /* (HL) */, "A" };
 
-        static Dictionary<string, OperandType> operandTypeMap = new()
+        static readonly Dictionary<string, OperandType> operandTypeMap = new()
         {
             ["$N+2"] = OperandType.Relative,  // -> XX
             ["$NN"] = OperandType.Absolute,   // -> XX XX
@@ -44,21 +46,21 @@ namespace Z80Core
             ["b"] = OperandType.Bit           // -> 8*b
         };
 
-        static Regex placeholdersRegex = new(String.Join("|", operandTypeMap.Select(it => $"(?:{Regex.Escape(it.Key)})")), RegexOptions.Compiled);
+        static readonly Regex placeholdersRegex = new(String.Join("|", operandTypeMap.Select(it => $"(?:{Regex.Escape(it.Key)})")), RegexOptions.Compiled);
 
-        private Instruction DecodeInstruction(string opcode, string operands, string bytes)
+        private static Instruction DecodeInstruction(string opcode, string operands, string bytes)
         {
             var matches = placeholdersRegex.Matches(operands);
             var operandList = new List<OperandType>();
 
-            string operandRegStr = Regex.Escape(operands);
+            string operandRegStr = $"^{Regex.Escape(operands)}$";
             foreach (Match match in matches)
             {
                 var operandType = operandTypeMap[match.Value];
                 operandList.Add(operandType);
-                operandRegStr = operandRegStr.Replace(Regex.Escape(match.Value), "(.+)");
+                operandRegStr = operandRegStr.Replace(Regex.Escape(match.Value), "([^(),]+)");
             }
-            var operandMatcher = new Regex(operandRegStr, RegexOptions.Compiled);
+            var operandMatcher = new Regex(operandRegStr, RegexOptions.Compiled | RegexOptions.IgnoreCase);
             var byteExpr = new List<Func<int[], byte>>();
 
             int xcount = 0;

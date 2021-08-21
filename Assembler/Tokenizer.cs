@@ -4,34 +4,6 @@ using System.Diagnostics;
 
 namespace Assembler
 {
-    internal enum TokenType
-    {
-        None,
-
-        Number,
-        String,
-        Symbol,
-        ExternalLabel,
-        OpenParen,
-        CloseParen,
-
-        Nul,
-        Low, High,
-        Multiply, Divide, Mod, Shr, Shl,
-        Neg,
-        Add, Subtract,
-        Eq, Ne, Lt, Le, Gt, Ge,
-        Not,
-        And,
-        Or, Xor
-    }
-
-    [DebuggerDisplay("{Type}: {Value}")]
-    internal class Token
-    {
-        public TokenType Type { get; set; }
-        public object Value { get; set; }
-    }
 
     internal static class Tokenizer
     {
@@ -43,7 +15,7 @@ namespace Assembler
             Symbol
         }
 
-        private static Dictionary<string, TokenType> operatorMap = new()
+        private static readonly Dictionary<string, TokenType> operatorMap = new()
         {
             ["NUL"]  = TokenType.Nul,
             ["LOW"]  = TokenType.Low,
@@ -107,6 +79,18 @@ namespace Assembler
                                 tokens.Add(new Token { Type = TokenType.CloseParen });
                                 expectingOperand = false;
                                 break;
+                            case '<':
+                                tokens.Add(new Token { Type = TokenType.OpenListParen });
+                                expectingOperand = true;
+                                break;
+                            case '>':
+                                tokens.Add(new Token { Type = TokenType.CloseListParen });
+                                expectingOperand = false;
+                                break;
+                            case ',':
+                                tokens.Add(new Token { Type = TokenType.Comma });
+                                expectingOperand = true;
+                                break;
                             case char n2 when
                                 (n2 >= 'a' && n2 <= 'z') ||
                                 (n2 >= 'A' && n2 <= 'Z') ||
@@ -134,33 +118,7 @@ namespace Assembler
                         bool finish = false;
                         switch (Char.ToUpper(ch))
                         {
-                            case 'B':
-                                if (radix <= 10)    // To distinguish between hexadecimal 'B' and suffix
-                                {
-                                    radix = 2;
-                                    finish = true;
-                                }
-                                break;
-                            case 'O':
-                            case 'Q':
-                                radix = 8;
-                                finish = true;
-                                break;
-                            case '.':
-                            case 'D':
-                                if (radix <= 10)    // To distinguish between hexadecimal 'D' and suffix
-                                {
-                                    radix = 10;
-                                    finish = true;
-                                }
-                                break;
-                            case 'H':
-                                radix = 16;
-                                finish = true;
-                                break;
-                            case char n when (n >= '0' && n <= '9') ||
-                                (n >= 'a' && n <= 'f') ||
-                                (n >= 'A' && n <= 'F'):
+                            case char n when Char.IsLetterOrDigit(n):
                                 buffer[bufferIndex++] = ch;
                                 break;
                             default:
@@ -185,7 +143,22 @@ namespace Assembler
                             }
                             else
                             {
-                                tokens.Add(new Token { Type = TokenType.Number, Value = Convert.ToInt32(new String(buffer, 0, bufferIndex), radix) });
+                                string rawValue = new(buffer, 0, bufferIndex);
+                                bool trimIt = true;
+                                switch (Char.ToUpper(rawValue[^1]))
+                                {
+                                    case '.': radix = 10; break;
+                                    case 'B': if (radix != 16) radix = 2; break;
+                                    case 'D': if (radix != 16) radix = 10; break;
+                                    case 'H': radix = 16; break;
+                                    case 'O': radix = 8; break;
+                                    case 'Q': radix = 8; break;
+                                    default:
+                                        trimIt = false;
+                                        break;
+                                }
+                                if (trimIt) rawValue = rawValue[0..^1];
+                                tokens.Add(new Token { Type = TokenType.Number, Value = Convert.ToInt32(rawValue, radix) });
                                 expectingOperand = false;
                             }
                             mode = Mode.None;
@@ -233,7 +206,9 @@ namespace Assembler
                         if (finish2)
                         {
                             string symbol = new(buffer, 0, bufferIndex);
-                            if (operatorMap.TryGetValue(symbol, out var tokenType))
+                            if (symbol == "$")
+                                tokens.Add(new Token { Type = TokenType.LocationCounter });
+                            else if (operatorMap.TryGetValue(symbol, out var tokenType))
                                 tokens.Add(new Token { Type = tokenType });
                             else
                                 tokens.Add(new Token { Type = TokenType.Symbol, Value = symbol });

@@ -4,14 +4,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace Assembler
+namespace Disassembler
 {
     public class Symbols: List<Symbol>
     {
         public Symbols() : base()
         {
         }
-        
+
         public Symbols(IEnumerable<Symbol> collection)
             : base(collection)
         {
