@@ -1,19 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Emulator;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using Emulator;
 
 namespace CPCAmstrad
 {
     public class GateArray
     {
-        private int lrom;
-        private int urom;
-        private int ram;
+        private readonly int lrom;
+        private readonly int urom;
+        private readonly int ram;
 
-        private Color[] colorPalette = new[] 
+        private readonly Color[] colorPalette = new[] 
         {
             Color.FromArgb(0x6E7D6B),
             Color.FromArgb(0x6E7B6D),
@@ -49,12 +45,13 @@ namespace CPCAmstrad
             Color.FromArgb(0x6E7BF6)
         };
 
-        private int[] colors = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+        private readonly int[] colors = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+        private readonly MemoryModel memoryModel;
+        private readonly bool[] memorySwitch;
+
         private int fnReg = 0;
         private int mode = 1;
         private int borderColor;
-        private MemoryModel memoryModel;
-        private bool[] memorySwitch;
         private int interruptCounter;
         private bool interruptState;
 
@@ -89,7 +86,7 @@ namespace CPCAmstrad
 
         public void InterruptAcknowledged()
         {
-            interruptCounter = (interruptCounter & 0x1F);
+            interruptCounter &= 0x1F;
             interruptState = false;
         }
 

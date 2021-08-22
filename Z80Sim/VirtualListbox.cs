@@ -1,4 +1,5 @@
 ﻿using Assembler;
+using Disassembler;
 using System;
 using System.Linq;
 using System.Windows.Forms;
@@ -36,7 +37,7 @@ namespace Z80TestConsole
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.Style = cp.Style & ~0x200000;
+                cp.Style &= ~0x200000;
                 return cp;
             }
         }

@@ -152,22 +152,20 @@ namespace Z80Core
             return ParseInt(state, expr);
         }
 
-        protected override bool TryOpcode(State state, OutputCollector outputCollector, string opcode, string operands)
+        protected override byte[] ParseOpcode(State state, OutputCollector outputCollector, string label, string opcode, string operands, string comment)
         {
             var instruction = instructions[opcode]
                 .Select(it => new { Instruction = it, Match = it.OperandMatcher.Match(operands) })
                 .FirstOrDefault(it => it.Match.Success);
-            if (instruction == null) return false;
+            if (instruction == null) return null;
+
             var values = instruction.Match.Groups.OfType<Group>()
 
                 .Select(it => it.Value).Skip(1)
                 .Zip(instruction.Instruction.OperandTypes, (a, b) => MapOperand(state, a, b))
                 .ToArray();
-            foreach (var byteDel in instruction.Instruction.Bytes)
-            {
-                outputCollector.Emit(byteDel(values));
-            }
-            return true;
+
+            return instruction.Instruction.Bytes.Select(it => it(values)).ToArray();
         }
     }
 }

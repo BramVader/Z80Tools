@@ -5,7 +5,7 @@ namespace Assembler
     public class Macro
     {
         public string Name { get; set; }
-        public List<string> ArgNames { get; set; }
+        public List<string> ParNames { get; set; }
 
         private readonly List<string> lines = new();
 

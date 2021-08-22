@@ -3,7 +3,7 @@
 
     public class Symbol
     {
-        public int? Value { get; set; }
+        public object Value { get; set; }
 
         public bool IsPublic { get; set; }    // When declared with double colon (::)
 

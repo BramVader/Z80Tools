@@ -52,7 +52,7 @@ namespace Assembler
             }
         }
 
-        private static readonly MethodInfo stateGetSymbolMethod = typeof(State).GetMethod(nameof(State.GetSymbol));
+        private static readonly MethodInfo stateGetSymbolAsWordMethod = typeof(State).GetMethod(nameof(State.GetSymbolAsWord));
         private static readonly MethodInfo stateGetLocationCounterMethod = typeof(State).GetMethod(nameof(State.GetLocationCounter));
         private static readonly MethodInfo nullableIntGetValueDefault = typeof(int?).GetMethod(nameof(Nullable<int>.GetValueOrDefault), Array.Empty<Type>());
 
@@ -62,7 +62,7 @@ namespace Assembler
             {
                 if (item.Token.Type != TokenType.Symbol)
                     throw new InvalidOperationException("Symbol expected");
-                item.Expression = Expression.Call(statePar, stateGetSymbolMethod, Expression.Constant((string)item.Token.Value));
+                item.Expression = Expression.Call(statePar, stateGetSymbolAsWordMethod, Expression.Constant((string)item.Token.Value));
             }
             return item.Expression;
         }
@@ -74,7 +74,7 @@ namespace Assembler
                 item.Expression = item.Token.Type switch
                 {
                     TokenType.Symbol => Expression.Call(
-                        Expression.Call(statePar, stateGetSymbolMethod, Expression.Constant((string)item.Token.Value)),
+                        Expression.Call(statePar, stateGetSymbolAsWordMethod, Expression.Constant((string)item.Token.Value)),
                         nullableIntGetValueDefault
                     ),
                     TokenType.Number => Expression.Constant((int)item.Token.Value),
@@ -268,6 +268,13 @@ namespace Assembler
             var tokens = Tokenizer.Tokenize(exprString, radix);
             var statePar = Expression.Parameter(typeof(State), "state");
             var expr = Compile(tokens, statePar);
+
+            // If an array (always of type object) is expected and an int is returned
+            // convert to:  new object[] { (object)expr }
+            if (expr.Type == typeof(int) && typeof(T) == typeof(object[]))
+            {
+                expr = Expression.NewArrayInit(typeof(object), Expression.Convert(expr, typeof(object)));
+            }
             var lambda = Expression.Lambda<Func<State, T>>(expr, statePar);
             return lambda.Compile();
         }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Assembler;
+using System;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -15,7 +16,8 @@ namespace Z80Validator
 
                 using var sr = new StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream("Z80Validator.zexall.a80"));
                 var assembler = new Z80Assembler();
-                await assembler.Assemble(sr);
+                var outputCollector = new OutputCollector(Console.Out);
+                await assembler.Assemble(outputCollector, sr);
             }
             catch (Exception e)
             {

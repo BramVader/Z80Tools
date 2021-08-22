@@ -1,5 +1,4 @@
-﻿using Assembler;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -243,7 +242,7 @@ namespace Z80TestConsole
                                 sb.Append(line.Operands);
                             }
                             sb.Append("\t");
-                            sb.Append(expr.Evaluate(true, "\t\t"));
+                            // TODO: Find evaluator code somewhere -- sb.Append(expr.Evaluate(true, "\t\t"));
                             writer.WriteLine(sb.ToString());
                         }
                     }

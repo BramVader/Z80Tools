@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace Assembler
 {
@@ -12,11 +13,44 @@ namespace Assembler
 
     public class State
     {
+        public class MacroState
+        {
+            public MacroState(Macro macro)
+            {
+                this.Macro = macro;
+            }
+
+            private readonly Dictionary<string, string> locals = new(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, Symbol> symbols = new(StringComparer.OrdinalIgnoreCase);
+
+            public Macro Macro { get; }
+
+            public void SetArguments(object[] arguments)
+            {
+                foreach (var it in Macro.ParNames.Select((it, i) => new { Name = it, Value = i < arguments.Length ? arguments[i] : null }))
+                    symbols.Add(it.Name, new Symbol { Name = it.Name, Value = it.Value });
+            }
+
+            public string SetLocal(string local, State state)
+            {
+                string replacement = state.GetUniqueLabel();
+                locals.Add(local, replacement);
+                return replacement;
+            }
+
+            public Symbol GetSymbol(string value) =>
+                symbols.TryGetValue(value, out Symbol sym) ? sym : null;
+
+            public string GetLocal(string value) =>
+                locals.TryGetValue(value, out string local) ? local : null;
+        }
+
         private readonly List<string> blockCommentCollector = new();
         private readonly Dictionary<string, Symbol> symbols = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Macro> macros = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Stack<MacroState> macroStates = new();
 
-        private readonly int dummyCounter = 0;
+        private int dummyCounter = 0;
 
         public int LineNr { get; set; }
 
@@ -45,6 +79,11 @@ namespace Assembler
             return st;
         }
 
+        public string GetUniqueLabel()
+        {
+            return $"..{Interlocked.Increment(ref dummyCounter):X4}";
+        }
+
         public void SetLabel(string name, SymbolType symbolType) =>
             SetLabel(name, Address, symbolType);
 
@@ -54,7 +93,7 @@ namespace Assembler
             name = name.TrimEnd(':');
             if (symbols.TryGetValue(name, out var lb))
             {
-                if (lb.Value.HasValue)
+                if (lb.Value != null)
                     throw new InvalidOperationException($"Label {name} already defined");
                 isPublic |= lb.IsPublic;
             }
@@ -67,9 +106,28 @@ namespace Assembler
             };
         }
 
-        public int? GetSymbol(string name)
+        public int? GetSymbolAsWord(string name)
         {
-            return symbols.TryGetValue(name, out Symbol value) ? value.Value : null;
+            Symbol symbol = null;
+            foreach (var expansion in macroStates)
+            {
+                symbol = expansion.GetSymbol(name);
+                if (symbol != null) break;
+            }
+
+            if (symbol == null && (!symbols.TryGetValue(name, out symbol) || symbol.Value == null))
+                return null;
+            switch (symbol.Value)
+            {
+                case object[] arr:
+                    if (arr.Length != 1)
+                        throw new InvalidOperationException("A single value expected");
+                    return (int?)arr[0];
+                case int a:
+                    return a;
+                default:
+                    throw new InvalidOperationException("Unexpected type");
+            }
         }
 
         public void SetSymbol(string name, int value, bool @readonly = false)
@@ -79,7 +137,7 @@ namespace Assembler
                 sm = new Symbol { Name = name };
                 symbols.Add(name, sm);
             }
-            if (@readonly && sm.Value.HasValue)
+            if (@readonly && sm.Value != null)
                 throw new InvalidOperationException($"Symbol {name} is already set");
             sm.Value = value;
             sm.Readonly = @readonly;
@@ -106,7 +164,7 @@ namespace Assembler
             var macro = new Macro
             {
                 Name = name,
-                ArgNames = args.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(it => it.Trim()).ToList(),
+                ParNames = args.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(it => it.Trim()).ToList(),
                 MacroType = macroType
             };
             if (!String.IsNullOrWhiteSpace(name)) macros.Add(name, macro);
@@ -121,6 +179,20 @@ namespace Assembler
             if (MacroDepth == 0)
                 CurrentMacro = null;
         }
+
+        public MacroState BeginMacroExpansion(Macro macro)
+        {
+            var expansion = new MacroState(macro);
+            macroStates.Push(expansion);
+            return expansion;
+        }
+
+        public void EndMacroExpansion()
+        {
+            macroStates.Pop();
+        }
+
+        public MacroState CurrentExpansion => macroStates.Count > 0 ? macroStates.Peek() : null;
 
         public Macro GetMacro(string name) =>
             macros.TryGetValue(name, out var macro) ? macro : null;
