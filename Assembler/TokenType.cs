@@ -30,5 +30,8 @@
         Irp,
         Irpc,
         Endm,
+        Error,
+        Label,
+        Comment
     }
 }

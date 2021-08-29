@@ -147,8 +147,9 @@ namespace Z80Core
             instructions = list.ToLookup(it => it.Opcode);
         }
 
-        private int MapOperand(State state, string expr, OperandType operandType)
+        private static int MapOperand(State state, string expr, OperandType operandType)
         {
+            // TODO: Handle operandType such as bit (check 0..7) and relative addresses
             return ParseInt(state, expr);
         }
 

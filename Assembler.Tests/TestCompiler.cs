@@ -33,7 +33,7 @@ namespace Assembler.Tests
         public void Compiler_ShouldCompileSimpleExpression(string exprString, int value)
         {
             var tokens = Tokenizer.Tokenize(exprString, 10);
-            var expr = Compiler.Compile(tokens);
+            var expr = Compiler.Compile(tokens, null);
             var lambda = Expression.Lambda<Func<int>>(expr);
             Assert.Equal(value, lambda.Compile()());
         }

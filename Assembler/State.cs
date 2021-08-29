@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace Assembler
@@ -13,6 +14,18 @@ namespace Assembler
 
     public class State
     {
+        private static readonly Regex symbolRegex = new(@"^([_A-Z\$.][_A-Z0-9\$.]*)?(?:\&([_A-Z\$.][_A-Z0-9\$.]*))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        public static string[] SplitLabel(string operands)
+        {
+            operands = operands.TrimEnd(':');
+            var match = symbolRegex.Match(operands);
+            if (!match.Success)
+                throw new InvalidOperationException("Symbol expression expected");
+            return new[] { match.Groups[1].Value, match.Groups[2].Value };
+        }
+
+
         public class MacroState
         {
             public MacroState(Macro macro)
@@ -20,35 +33,79 @@ namespace Assembler
                 this.Macro = macro;
             }
 
-            private readonly Dictionary<string, string> locals = new(StringComparer.OrdinalIgnoreCase);
             private readonly Dictionary<string, Symbol> symbols = new(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, string> substitutes = new(StringComparer.OrdinalIgnoreCase);
 
             public Macro Macro { get; }
 
             public void SetArguments(object[] arguments)
             {
                 foreach (var it in Macro.ParNames.Select((it, i) => new { Name = it, Value = i < arguments.Length ? arguments[i] : null }))
-                    symbols.Add(it.Name, new Symbol { Name = it.Name, Value = it.Value });
+                    SetSymbol(it.Name, it.Value, true);
             }
 
-            public string SetLocal(string local, State state)
+            public string SetSubstitute(string local, State state)
             {
-                string replacement = state.GetUniqueLabel();
-                locals.Add(local, replacement);
-                return replacement;
+                string substitute = state.GetUniqueLabel();
+                this.substitutes.Add(local, substitute);
+                return substitute;
             }
 
-            public Symbol GetSymbol(string value) =>
-                symbols.TryGetValue(value, out Symbol sym) ? sym : null;
+            public Symbol GetSymbol(string value)
+            {
+                var parts = State.SplitLabel(value);
+                string symbol = parts[0];
+                if (parts[1] != "")
+                {
+                    symbol += GetSubstitute(parts[1]);
+                }
+                return symbols.TryGetValue(symbol, out Symbol sym) ? sym : null;
+            }
 
-            public string GetLocal(string value) =>
-                locals.TryGetValue(value, out string local) ? local : null;
+            public string GetSubstitute(string value) =>
+                substitutes.TryGetValue(value, out string local) ? local : value;
+
+            internal Symbol SetSymbol(Symbol symbol)
+            {
+                if (!symbols.TryGetValue(symbol.Name, out var sm))
+                {
+                    symbols.Add(symbol.Name, symbol);
+                    return symbol;
+                }
+                else
+                {
+                    if (sm.Readonly && sm.Value != null)
+                        throw new InvalidOperationException($"Symbol {sm.Name} is already set");
+                    return sm;
+                }
+            }
+
+            public Symbol SetSymbol(string name, object value, bool @readonly = false)
+            {
+                return SetSymbol(new Symbol
+                {
+                    Name = name,
+                    Value = new object[] { value },
+                    Readonly = @readonly,
+                });
+            }
+
+            public Symbol SetSymbol(string name, object[] value, bool @readonly = false)
+            {
+                return SetSymbol(new Symbol
+                {
+                    Name = name,
+                    Value = value,
+                    Readonly = @readonly,
+                });
+            }
         }
 
         private readonly List<string> blockCommentCollector = new();
         private readonly Dictionary<string, Symbol> symbols = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Macro> macros = new(StringComparer.OrdinalIgnoreCase);
         private readonly Stack<MacroState> macroStates = new();
+        private readonly Stack<bool> ifStates = new();
 
         private int dummyCounter = 0;
 
@@ -65,6 +122,14 @@ namespace Assembler
         public Macro CurrentMacro { get; set; }
 
         public int MacroDepth { get; set; } = 0;
+
+        public int Pass { get; set; } = 1;
+
+
+        public void ThrowException(string message)
+        {
+            throw new InvalidOperationException($"{message} in line {LineNr}");
+        }
 
         public void AddLineToBlockComment(string st)
         {
@@ -84,29 +149,20 @@ namespace Assembler
             return $"..{Interlocked.Increment(ref dummyCounter):X4}";
         }
 
-        public void SetLabel(string name, SymbolType symbolType) =>
+        public Symbol SetLabel(string name, SymbolType symbolType) =>
             SetLabel(name, Address, symbolType);
 
-        public void SetLabel(string name, int address, SymbolType symbolType)
+        public Symbol SetLabel(string name, int address, SymbolType symbolType)
         {
             bool isPublic = name.EndsWith("::");
             name = name.TrimEnd(':');
-            if (symbols.TryGetValue(name, out var lb))
-            {
-                if (lb.Value != null)
-                    throw new InvalidOperationException($"Label {name} already defined");
-                isPublic |= lb.IsPublic;
-            }
-            symbols[name] = new Symbol
-            {
-                Value = address,
-                IsPublic = isPublic,
-                Name = name,
-                Type = symbolType
-            };
+            var symbol = SetSymbol(name, address);
+            symbol.IsPublic = isPublic;
+            symbol.Type = symbolType;
+            return symbol;
         }
 
-        public int? GetSymbolAsWord(string name)
+        public object[] GetSymbol(string name)
         {
             Symbol symbol = null;
             foreach (var expansion in macroStates)
@@ -116,31 +172,65 @@ namespace Assembler
             }
 
             if (symbol == null && (!symbols.TryGetValue(name, out symbol) || symbol.Value == null))
-                return null;
-            switch (symbol.Value)
             {
-                case object[] arr:
-                    if (arr.Length != 1)
-                        throw new InvalidOperationException("A single value expected");
-                    return (int?)arr[0];
-                case int a:
-                    return a;
-                default:
-                    throw new InvalidOperationException("Unexpected type");
+                if (Pass == 2)
+                    ThrowException($"Unknown symbol {name}");
+                return new object[] { null };
+            }
+
+            return symbol.Value;
+        }
+
+        public int? GetSymbolAsWord(string name)
+        {
+            var objArr = GetSymbol(name);
+            if (objArr.Length != 1)
+                throw new InvalidOperationException("A single value expected");
+            return (int?)objArr[0];
+        }
+
+        public Symbol SetSymbol(Symbol symbol)
+        {
+            var curr = CurrentExpansion;
+            if (curr != null)
+            {
+                return curr.SetSymbol(symbol);
+            }
+            else
+            {
+                if (!symbols.TryGetValue(symbol.Name, out var sm))
+                {
+                    symbols.Add(symbol.Name, symbol);
+                    return symbol;
+                }
+                else
+                {
+                    if (sm.Readonly && sm.Value != null)
+                        throw new InvalidOperationException($"Symbol {symbol.Name} is already set");
+                    sm.Value = symbol.Value;
+                    return sm;
+                }
             }
         }
 
-        public void SetSymbol(string name, int value, bool @readonly = false)
+        public Symbol SetSymbol(string name, object value, bool @readonly = false)
         {
-            if (!symbols.TryGetValue(name, out var sm))
+            return SetSymbol(new Symbol
             {
-                sm = new Symbol { Name = name };
-                symbols.Add(name, sm);
-            }
-            if (@readonly && sm.Value != null)
-                throw new InvalidOperationException($"Symbol {name} is already set");
-            sm.Value = value;
-            sm.Readonly = @readonly;
+                Name = name,
+                Value = new object[] { value },
+                Readonly = @readonly,
+            });
+        }
+
+        public Symbol SetSymbol(string name, object[] value, bool @readonly = false)
+        {
+            return SetSymbol(new Symbol
+            {
+                Name = name,
+                Value = value,
+                Readonly = @readonly,
+            });
         }
 
         public int GetLocationCounter()
@@ -158,6 +248,8 @@ namespace Assembler
             }
             sm.IsPublic = true;
         }
+
+        // Macro support
 
         public Macro BeginMacro(string name, string args, TokenType macroType)
         {
@@ -186,7 +278,6 @@ namespace Assembler
             macroStates.Push(expansion);
             return expansion;
         }
-
         public void EndMacroExpansion()
         {
             macroStates.Pop();
@@ -196,5 +287,29 @@ namespace Assembler
 
         public Macro GetMacro(string name) =>
             macros.TryGetValue(name, out var macro) ? macro : null;
+
+        // IF - conditions
+
+        public void HandleIf(bool cond)
+        {
+            ifStates.Push(cond);
+        }
+        public void HandleElse()
+        {
+            if (ifStates.Count == 0)
+                throw new InvalidOperationException("ELSE without IF");
+            bool cond = ifStates.Pop();
+            ifStates.Push(!cond);
+        }
+
+        public void HandleEndIf()
+        {
+            if (ifStates.Count == 0)
+                throw new InvalidOperationException("ENDIF without IF");
+            ifStates.Pop();
+        }
+
+        public bool HasCondition =>
+            ifStates.Count == 0 ? true : ifStates.All(it => it);
     }
 }

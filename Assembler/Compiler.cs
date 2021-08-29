@@ -52,17 +52,25 @@ namespace Assembler
             }
         }
 
+        private static readonly MethodInfo stateGetSymbolMethod = typeof(State).GetMethod(nameof(State.GetSymbol));
         private static readonly MethodInfo stateGetSymbolAsWordMethod = typeof(State).GetMethod(nameof(State.GetSymbolAsWord));
         private static readonly MethodInfo stateGetLocationCounterMethod = typeof(State).GetMethod(nameof(State.GetLocationCounter));
         private static readonly MethodInfo nullableIntGetValueDefault = typeof(int?).GetMethod(nameof(Nullable<int>.GetValueOrDefault), Array.Empty<Type>());
 
-        private static Expression GetSymbolExpression(ParameterExpression statePar, TokenAndExpr item)
+        private static Expression GetExpression(ParameterExpression statePar, TokenAndExpr item)
         {
             if (item.Expression == null)
             {
-                if (item.Token.Type != TokenType.Symbol)
-                    throw new InvalidOperationException("Symbol expected");
-                item.Expression = Expression.Call(statePar, stateGetSymbolAsWordMethod, Expression.Constant((string)item.Token.Value));
+                item.Expression = item.Token.Type switch
+                {
+                    TokenType.Symbol =>
+                        Expression.Call(statePar, stateGetSymbolMethod, Expression.Constant((string)item.Token.Value)),
+                    TokenType.Number => Expression.Constant((int)item.Token.Value),
+                    TokenType.String => Expression.Constant((string)item.Token.Value),
+                    TokenType.LocationCounter =>
+                        Expression.Call(statePar, stateGetLocationCounterMethod),
+                    _ => throw new InvalidOperationException("Integer constant or symbol expected"),
+                };
             }
             return item.Expression;
         }
@@ -108,11 +116,10 @@ namespace Assembler
         };
 
 
-        public static Expression Compile(IEnumerable<Token> tokens, ParameterExpression statePar = null)
+        public static Expression Compile(IEnumerable<Token> tokens, ParameterExpression statePar)
         {
             static string tokenName(TokenType type) => type.ToString().ToUpper();
 
-            statePar ??= Expression.Parameter(typeof(State), "state");
             var list = tokens.Select(it => new TokenAndExpr { Token = it }).ToList();
 
             // Eliminate brackets
@@ -153,7 +160,7 @@ namespace Assembler
                             {
                                 Token = new Token { Type = TokenType.None },
                                 Expression = expr is ConstantExpression cexpr && cexpr.Value == null
-                                    ? Expression.NewArrayBounds(typeof(object), Expression.Constant(0))
+                                    ? Expression.NewArrayBounds(typeof(object), Expression.Constant(null))
                                     : expr
                             };
                         }
@@ -186,7 +193,7 @@ namespace Assembler
 
                             case TokenType.Nul:
                                 expr = Expression.Equal(
-                                    GetSymbolExpression(statePar, itemRight),
+                                    GetExpression(statePar, itemRight),
                                     Expression.Constant((int?)null)
                                 );
                                 break;
@@ -238,6 +245,7 @@ namespace Assembler
                                 break;
                         }
                         item.Expression = expr;
+                        item.Token.Type = TokenType.None;
                         list.RemoveAt(i + 1);
                         if (!isUnary)
                         {
@@ -248,6 +256,8 @@ namespace Assembler
                 }
             }
 
+            // Check the list bounds
+            // In the end it should be reduced to just one element 
             if (list.Count > 1)
                 throw new InvalidOperationException("Expression not terminated correctly");
             if (list.Count == 0)
@@ -258,25 +268,58 @@ namespace Assembler
                         // Apply boxing where needed
                         it => it.Type != typeof(object) ? Expression.Convert(it, typeof(object)) : it
                     ));
-            if (list[0].Expression != null)
-                return list[0].Expression;
-            return GetWordExpression(statePar, list[0]);
+
+            // Try to return the final element as an object[] array
+            var expr2 = list[0].Expression;
+            if (expr2 == null)
+                expr2 = GetExpression(statePar, list[0]);
+            if (expr2 is ConstantExpression cexpr2 && cexpr2.Value == null)
+                return Expression.NewArrayBounds(typeof(object), Expression.Constant(null));
+            if (expr2.Type == typeof(object[]))
+                return expr2;
+            return
+                Expression.NewArrayInit(typeof(object), expr2.Type != typeof(object) ? Expression.Convert(expr2, typeof(object)) : expr2);
         }
 
-        public static Func<State, T> Compile<T>(string exprString, int radix)
-        {
+        public static Func<State, object[]> Compile(string exprString, int radix)
+         {
             var tokens = Tokenizer.Tokenize(exprString, radix);
             var statePar = Expression.Parameter(typeof(State), "state");
             var expr = Compile(tokens, statePar);
-
-            // If an array (always of type object) is expected and an int is returned
-            // convert to:  new object[] { (object)expr }
-            if (expr.Type == typeof(int) && typeof(T) == typeof(object[]))
-            {
-                expr = Expression.NewArrayInit(typeof(object), Expression.Convert(expr, typeof(object)));
-            }
-            var lambda = Expression.Lambda<Func<State, T>>(expr, statePar);
+            var lambda = Expression.Lambda<Func<State, object[]>>(expr, statePar);
             return lambda.Compile();
+        }
+
+        public static object[] Get(string exprString, State state)
+        {
+            var func = Compile(exprString, state.Radix);
+            return func(state);
+        }
+
+        public static bool? GetBool(string exprString, State state)
+        {
+            var func = Compile(exprString, state.Radix);
+            var objArr = func(state);
+            if (objArr.Length > 1)
+                throw new InvalidOperationException("Single element expected");
+            if (objArr.Length == 0 || objArr[0] == null)
+                return null;
+            if (objArr[0].GetType() != typeof(bool))
+                throw new InvalidOperationException("Boolean value expected");
+            return (bool)objArr[0];
+        }
+
+        public static int? GetInt(string exprString, State state)
+        {
+            var func = Compile(exprString, state.Radix);
+            var objArr =func(state);
+            if (objArr.Length > 1)
+                throw new InvalidOperationException("Single element expected");
+            if (objArr.Length == 0 || objArr[0] == null)
+                return null;
+            if (objArr[0].GetType() != typeof(int))
+                throw new InvalidOperationException("Integer value expected");
+            return (int)objArr[0];
         }
     }
 }

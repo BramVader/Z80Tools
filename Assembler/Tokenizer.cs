@@ -12,10 +12,11 @@ namespace Assembler
             None,
             Number,
             String,
-            Symbol
+            Symbol,
+            Comment
         }
 
-        private static readonly Dictionary<string, TokenType> operatorMap = new()
+        private static readonly Dictionary<string, TokenType> operatorMap = new(StringComparer.OrdinalIgnoreCase)
         {
             ["NUL"]  = TokenType.Nul,
             ["LOW"]  = TokenType.Low,
@@ -69,6 +70,10 @@ namespace Assembler
                                 mode = Mode.String;
                                 stringDelimiter = ch;
                                 bufferIndex = 0;
+                                break;
+                            case ';':
+                                mode = Mode.Comment;
+                                bufferIndex = 0;
                                 buffer[bufferIndex++] = ch;
                                 break;
                             case '(':
@@ -94,7 +99,7 @@ namespace Assembler
                             case char n2 when
                                 (n2 >= 'a' && n2 <= 'z') ||
                                 (n2 >= 'A' && n2 <= 'Z') ||
-                                n2 == '$' || n2 == '.' || n2 == '?' || n2 == '@':
+                                n2 == '$' || n2 == '.' || n2 == '?' || n2 == '@' || n2 == '&':
                                 mode = Mode.Symbol;
                                 bufferIndex = 0;
                                 buffer[bufferIndex++] = ch;
@@ -168,7 +173,8 @@ namespace Assembler
                     case Mode.String:
                         if (ch == stringDelimiter)
                         {
-                            if (data[i] == stringDelimiter)
+                            // Next character is a delimiter as well? Then escape it
+                            if (i < data.Length && data[i] == stringDelimiter)
                             {
                                 buffer[bufferIndex++] = ch;
                                 i++;
@@ -210,10 +216,21 @@ namespace Assembler
                                 tokens.Add(new Token { Type = TokenType.LocationCounter });
                             else if (operatorMap.TryGetValue(symbol, out var tokenType))
                                 tokens.Add(new Token { Type = tokenType });
+                            else if (symbol.EndsWith(':'))
+                                tokens.Add(new Token { Type = TokenType.Label, Value = symbol });
                             else
                                 tokens.Add(new Token { Type = TokenType.Symbol, Value = symbol });
                             mode = Mode.None;
                             expectingOperand = false;
+                        }
+                        break;
+
+                    case Mode.Comment:
+                        buffer[bufferIndex++] = ch;
+                        if (i == chars.Length - 1)
+                        {
+                            string comment = new(buffer, 0, bufferIndex);
+                            tokens.Add(new Token { Type = TokenType.Comment, Value = comment });
                         }
                         break;
                 }
