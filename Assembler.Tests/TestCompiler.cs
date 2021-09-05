@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using Xunit;
 
@@ -25,6 +26,11 @@ namespace Assembler.Tests
             return true;
         }
 
+        private Expression Unwrap(Expression exp)
+        {
+            return ((exp as NewArrayExpression).Expressions[0] as UnaryExpression).Operand;
+        }
+
 
         [Theory]
         [InlineData("15 * -(3+4)", 15 * -(3 + 4))]
@@ -33,7 +39,7 @@ namespace Assembler.Tests
         public void Compiler_ShouldCompileSimpleExpression(string exprString, int value)
         {
             var tokens = Tokenizer.Tokenize(exprString, 10);
-            var expr = Compiler.Compile(tokens, null);
+            var expr = Unwrap(Compiler.Compile(tokens, null));
             var lambda = Expression.Lambda<Func<int>>(expr);
             Assert.Equal(value, lambda.Compile()());
         }
@@ -55,7 +61,7 @@ namespace Assembler.Tests
             foreach (var item in condExpr)
             {
                 var tokens = Tokenizer.Tokenize(item.Item1, 10);
-                var expr = Compiler.Compile(tokens, statePar);
+                var expr = Unwrap(Compiler.Compile(tokens, statePar));
                 Assert.True(ExpressionsEqual(item.Item2.Body, expr));
 
                 var lambda1 = item.Item2;
@@ -67,15 +73,16 @@ namespace Assembler.Tests
 
         }
 
-
         private static readonly List<(string, Expression<Func<int, int, object>>)> listExpr = new()
         {
-            ("13, 14, a", (a, b) => new object[] { 13, 14, a }),
-            ("<13, 14, a>", (a, b) => new object[] { 13, 14, a }),
+            ("13, 14, a", (a, b) => new object[] { 13, 14, new object[] { a } }),
+            ("<13, 14, a>", (a, b) => new object[] { 13, 14, new object[] { a } }),
             ("", (a, b) => null),
-            ("<>", (a, b) => new object[0]),
-            ("<13, 14, <15, 16, a>, 17, <18, <19, <20, 21>>>>", (a, b) => new object[] { 13, 14, new object[] { 15, 16, a }, 17, new object[] { 18, new object[] { 19, new object[] { 20, 21 } } } })
+            ("<13>", (a, b) => new object[] { 13 }),
+            ("<13, 14, <15, 16, a>, 17, <18, <19, <20, 21>>>>", (a, b) => new object[] { 13, 14, new object[] { 15, 16, new object[] {a} }, 17, new object[] { 18, new object[] { 19, new object[] { 20, 21 }}}} ),
+            ("<3 * 4 + 2, 3 * (4 + 2)>", (a, b) => new object[] { 3 * 4 + 2, 3 * ( 4 + 2) })
         };
+
 
         [Fact]
         public void Compiler_ShouldCompileLists()
@@ -87,14 +94,17 @@ namespace Assembler.Tests
             foreach (var item in listExpr)
             {
                 var tokens = Tokenizer.Tokenize(item.Item1, 10);
-                var expr = Compiler.Compile(tokens, statePar);
-                Assert.True(ExpressionsEqual(item.Item2.Body, expr));
+                var expr1 = Compiler.Compile(tokens, statePar);
+                var expr2 = item.Item2.Body;
+                Assert.True(ExpressionsEqual(expr2, expr1));
 
                 var lambda1 = item.Item2;
                 var fun1 = lambda1.Compile();
-                var lambda2 = Expression.Lambda<Func<State, object[]>>(expr, statePar);
+                var lambda2 = Expression.Lambda<Func<State, object[]>>(expr1, statePar);
                 var fun2 = lambda2.Compile();
-                Assert.Equal(fun1(10, 20), fun2(state));
+                var expected = fun1(10, 20);
+                var actual = fun2(state);
+                Assert.Equal(expected, actual);
             }
 
         }

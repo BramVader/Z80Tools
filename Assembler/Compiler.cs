@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -38,64 +37,71 @@ namespace Assembler
             TokenType.Not
         };
 
-        private class TokenAndExpr
-        {
-            public Token Token { get; set; }
-            public Expression Expression { get; set; }
-
-            public List<Expression> List { get; set; }
-
-            public override string ToString()
-            {
-                var val = Token.Value == null ? "" : ": " + Token.Value.ToString();
-                return $"{Token.Type}{val} - {Expression?.ToString() ?? "<null>"}";
-            }
-        }
-
         private static readonly MethodInfo stateGetSymbolMethod = typeof(State).GetMethod(nameof(State.GetSymbol));
-        private static readonly MethodInfo stateGetSymbolAsWordMethod = typeof(State).GetMethod(nameof(State.GetSymbolAsWord));
         private static readonly MethodInfo stateGetLocationCounterMethod = typeof(State).GetMethod(nameof(State.GetLocationCounter));
-        private static readonly MethodInfo nullableIntGetValueDefault = typeof(int?).GetMethod(nameof(Nullable<int>.GetValueOrDefault), Array.Empty<Type>());
 
-        private static Expression GetExpression(ParameterExpression statePar, TokenAndExpr item)
+        private static Expression GetExpression(ParameterExpression statePar, Token token)
         {
-            if (item.Expression == null)
+            Expression expr = token.Type switch
             {
-                item.Expression = item.Token.Type switch
-                {
-                    TokenType.Symbol =>
-                        Expression.Call(statePar, stateGetSymbolMethod, Expression.Constant((string)item.Token.Value)),
-                    TokenType.Number => Expression.Constant((int)item.Token.Value),
-                    TokenType.String => Expression.Constant((string)item.Token.Value),
-                    TokenType.LocationCounter =>
-                        Expression.Call(statePar, stateGetLocationCounterMethod),
-                    _ => throw new InvalidOperationException("Integer constant or symbol expected"),
-                };
-            }
-            return item.Expression;
+                TokenType.Symbol =>
+                    Expression.Call(statePar, stateGetSymbolMethod, Expression.Constant((string)token.Value)),
+                TokenType.Number => Expression.Constant((int)token.Value),
+                TokenType.String => Expression.Constant((string)token.Value),
+                TokenType.LocationCounter =>
+                    Expression.Call(statePar, stateGetLocationCounterMethod),
+                _ => throw new InvalidOperationException("Integer constant or symbol expected"),
+            };
+            if (expr is NewArrayExpression nexp)
+                expr = nexp.Expressions[0];
+            if (expr is UnaryExpression uexp)
+                expr = uexp.Operand;
+            return expr;
         }
 
-        private static Expression GetWordExpression(ParameterExpression statePar, TokenAndExpr item)
-        {
-            if (item.Expression == null)
-            {
-                item.Expression = item.Token.Type switch
-                {
-                    TokenType.Symbol => Expression.Call(
-                        Expression.Call(statePar, stateGetSymbolAsWordMethod, Expression.Constant((string)item.Token.Value)),
-                        nullableIntGetValueDefault
-                    ),
-                    TokenType.Number => Expression.Constant((int)item.Token.Value),
-                    TokenType.LocationCounter =>
-                        Expression.Call(statePar, stateGetLocationCounterMethod),
-                    _ => throw new InvalidOperationException("Integer constant or symbol expected"),
+        private static string TokenName(TokenType type) => type.ToString().ToUpper();
 
-                };
+        private static Expression ExpectNumber(Expression expr)
+        {
+            if (expr.Type == typeof(object[]))
+            {
+                expr = ExpectNumber(Expression.ArrayAccess(expr, Expression.Constant(0)));
             }
-            return item.Expression;
+            else
+            if (expr.Type == typeof(object))
+            {
+                expr = Expression.Convert(expr, typeof(int));
+            }
+            else
+            if (expr.Type != typeof(int))
+            {
+                throw new InvalidOperationException("Numeric value expected");
+            }
+            return expr;
         }
 
-        private static readonly Dictionary<TokenType, Func<Expression, Expression, BinaryExpression>> tokenTypeMapper = new()
+        private static Expression HandleUnary(Token token, Expression o)
+        {
+            switch (token.Type)
+            {
+                case TokenType.Nul:
+                    return Expression.Equal(o, Expression.Constant((int?)null));
+                case TokenType.Low:
+                    return Expression.And(o, Expression.Constant(0x00FF));
+                case TokenType.High:
+                    return Expression.RightShift(o, Expression.Constant(8));
+                case TokenType.Neg:
+                    return Expression.Negate(o);
+                case TokenType.Not:
+                    if (o == null || o.Type != typeof(bool))
+                        throw new InvalidOperationException("Boolean expression missing to the right of NOT");
+                    return Expression.Not(o);
+                default:
+                    throw new InvalidOperationException($"Unknown unary expression: {token.Type}");
+            }
+        }
+
+        private static readonly Dictionary<TokenType, Func<Expression, Expression, BinaryExpression>> binaryExprMapper = new()
         {
             [TokenType.Multiply] = Expression.Multiply,
             [TokenType.Divide] = Expression.Divide,
@@ -115,174 +121,197 @@ namespace Assembler
             [TokenType.Xor] = Expression.ExclusiveOr
         };
 
+        private static Expression HandleBinary(Token token, Expression b, Expression a)
+        {
+            switch (token.Type)
+            {
+                case TokenType.And:
+                    if (a.Type == typeof(bool) &&
+                        b.Type == typeof(bool))
+                        return Expression.AndAlso(a, b);
+                    else
+                        return Expression.And(ExpectNumber(a), ExpectNumber(b));
 
+                case TokenType.Or:
+                    if (a.Type == typeof(bool) &&
+                        b.Type == typeof(bool))
+                        return Expression.OrElse(a, b);
+                    else
+                        return Expression.Or(ExpectNumber(a), ExpectNumber(b));
+
+                default:
+                    if (!binaryExprMapper.TryGetValue(token.Type, out var func))
+                        throw new InvalidOperationException($"Unexpected token {TokenName(token.Type)}");
+
+                    return func(ExpectNumber(a), ExpectNumber(b));
+            }
+        }
+
+        private static Expression HandleList(Expression b, Expression a)
+        {
+            List<Expression> list;
+            if (a is NewArrayExpression arrx)
+            {
+                list = arrx.Expressions.ToList();
+            }
+            else
+            {
+                list = new List<Expression>();
+                if (a.Type != typeof(object))
+                    a = Expression.Convert(a, typeof(object));
+                list.Add(a);
+            }
+            if (b.Type != typeof(object))
+                b = Expression.Convert(b, typeof(object));
+            list.Add(b);
+            return Expression.NewArrayInit(typeof(object), list);
+        }
+
+        private static Expression HandleSingleValueList(Expression o)
+        {
+            if (!(o is NewArrayExpression))
+            {
+                if (o.Type != typeof(object))
+                    o = Expression.Convert(o, typeof(object));
+                o = Expression.NewArrayInit(typeof(object), o);
+            }
+            return o;
+
+        }
+
+        private static void HandleTopStackOperator(Stack<Expression> valueStack, Stack<Token> operatorStack)
+        {
+            var topToken = operatorStack.Pop();
+            switch (topToken.Type)
+            {
+                case TokenType.OpenListParen:
+                    valueStack.Push(HandleSingleValueList(
+                        valueStack.Pop()
+                    ));
+                    break;
+
+                case TokenType.Comma:
+                    valueStack.Push(HandleList(
+                        valueStack.Pop(),
+                        valueStack.Pop()
+                    ));
+                    break;
+
+                default:
+                    if (unaryOperators.Contains(topToken.Type))
+                    {
+                        valueStack.Push(HandleUnary(
+                            topToken,
+                            valueStack.Pop()
+                        ));
+                    }
+                    else
+                    {
+                        valueStack.Push(HandleBinary(
+                            topToken,
+                            valueStack.Pop(),
+                            valueStack.Pop()
+                        ));
+                    }
+                    break;
+            }
+        }
+
+        // Closes a possible list by wrapping it into an object (so it will not grow anymore
+        // an possibly become an element of a parent list).
+        private static void MaybeCloseList(Stack<Expression> valueStack, Stack<Token> operatorStack)
+        {
+            if (operatorStack.TryPeek(out var topToken) && topToken.Type == TokenType.OpenListParen &&
+                valueStack.TryPeek(out Expression topValue) && topValue is NewArrayExpression)
+            {
+                valueStack.Pop();
+                valueStack.Push(Expression.Convert(topValue, typeof(object)));
+            }
+        }
+
+        // Using the Shunting Yard algorithm using two stacks
         public static Expression Compile(IEnumerable<Token> tokens, ParameterExpression statePar)
         {
-            static string tokenName(TokenType type) => type.ToString().ToUpper();
+            var valueStack = new Stack<Expression>();
+            var operatorStack = new Stack<Token>();
 
-            var list = tokens.Select(it => new TokenAndExpr { Token = it }).ToList();
-
-            // Eliminate brackets
-            int level1 = 0;
-            int level2 = 0;
-            int j = -1;
-            for (int i = 0; i < list.Count; i++)
+            foreach (var token in tokens)
             {
-                var item = list[i];
-                switch (item.Token.Type)
+                switch (token.Type)
                 {
-                    case TokenType.OpenParen:
-                        if (++level1 == 1)
-                            j = i;
+                    case TokenType.Number:
+                        valueStack.Push(Expression.Constant((int)token.Value));
                         break;
+                    case TokenType.Symbol:
+                        valueStack.Push(GetExpression(statePar, token));
+                        break;
+                    //case TokenType.Comma:
+                    case TokenType.OpenParen:
                     case TokenType.OpenListParen:
-                        if (++level2 == 1)
-                            j = i;
+                        operatorStack.Push(token);
                         break;
                     case TokenType.CloseParen:
-                        if (level1-- == 1)
-                        {
-                            var sublist = list.Skip(j + 1).Take(i - j - 1).Select(it => it.Token).ToList();
-                            var expr = Compile(sublist, statePar);
-                            list.RemoveRange(j, i - j);
-                            i = j;
-                            list[i] = new TokenAndExpr { Token = new Token { Type = TokenType.None }, Expression = expr };
-                        }
-                        break;
                     case TokenType.CloseListParen:
-                        if (level2-- == 1)
+                        while (
+                            operatorStack.Peek().Type != TokenType.OpenParen &&
+                            operatorStack.Peek().Type != TokenType.OpenListParen
+                        )
                         {
-                            var sublist = list.Skip(j + 1).Take(i - j - 1).Select(it => it.Token).ToList();
-                            var expr = Compile(sublist, statePar);
-                            list.RemoveRange(j, i - j);
-                            i = j;
-                            list[i] = new TokenAndExpr
+                            HandleTopStackOperator(valueStack, operatorStack);
+                        }
+                        MaybeCloseList(valueStack, operatorStack);
+                        operatorStack.Pop(); // Pop and discard the opening paren
+                        break;
+                    default:    // operators
+                        // If the token has precedence specified, we know its an operator
+                        if (precedence.TryGetValue(token.Type, out int prec))
+                        {
+                            while (operatorStack.TryPeek(out Token topToken) &&
+                                topToken.Type != TokenType.OpenParen &&
+                                topToken.Type != TokenType.OpenListParen &&
+                                (!precedence.TryGetValue(topToken.Type, out int topPrec) ||
+                                topPrec <= prec))
                             {
-                                Token = new Token { Type = TokenType.None },
-                                Expression = expr is ConstantExpression cexpr && cexpr.Value == null
-                                    ? Expression.NewArrayBounds(typeof(object), Expression.Constant(null))
-                                    : expr
-                            };
+                                HandleTopStackOperator(valueStack, operatorStack);
+                            }
+                            //MaybeCloseList(valueStack, operatorStack);
+                            operatorStack.Push(token);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Unexpected operator {TokenName(token.Type)}");
                         }
                         break;
+
                 }
             }
-
-            for (int prec1 = 0; prec1 < 10; prec1++)
+            while (operatorStack.Count > 0)
             {
-                for (int i = 0; i < list.Count; i++)
-                {
-                    var item = list[i];
-
-                    if (precedence.TryGetValue(item.Token.Type, out int prec2) && prec2 == prec1)
-                    {
-                        bool isUnary = unaryOperators.Contains(item.Token.Type);
-
-                        if (!isUnary && i == 0)
-                            throw new InvalidOperationException($"Operand missing to the left of operator {tokenName(item.Token.Type)}");
-                        if (i >= list.Count - 1)
-                            throw new InvalidOperationException($"Operand missing to the right of operator {tokenName(item.Token.Type)}");
-
-                        var itemLeft = !isUnary ? list[i - 1] : null;
-                        var itemRight = i < list.Count - 1 ? list[i + 1] : null;
-
-                        Expression expr = null;
-                        switch (item.Token.Type)
-                        {
-                            /* Unary expressions */
-
-                            case TokenType.Nul:
-                                expr = Expression.Equal(
-                                    GetExpression(statePar, itemRight),
-                                    Expression.Constant((int?)null)
-                                );
-                                break;
-                            case TokenType.Low:
-                                expr = Expression.And(GetWordExpression(statePar, itemRight), Expression.Constant(0x00FF));
-                                break;
-
-                            case TokenType.High:
-                                expr = Expression.RightShift(GetWordExpression(statePar, itemRight), Expression.Constant(8));
-                                break;
-                            case TokenType.Neg:
-                                expr = Expression.Negate(GetWordExpression(statePar, itemRight));
-                                break;
-                            case TokenType.Not:
-                                if (itemRight.Expression == null || itemRight.Expression.Type != typeof(bool))
-                                    throw new InvalidOperationException("Boolean expressing missing to the right of NOT");
-                                expr = Expression.Not(itemRight.Expression);
-                                break;
-
-                            /* All other binary expressions */
-                            case TokenType.Comma:
-                                var list1 = itemLeft.List ?? new List<Expression>() { GetWordExpression(statePar, itemLeft) };
-                                var list2 = itemRight.List ?? new List<Expression>() { GetWordExpression(statePar, itemRight) };
-                                list1.AddRange(list2);
-                                item.List = list1;
-                                break;
-
-                            case TokenType.And:
-                                if (itemLeft.Expression?.Type == typeof(bool) &&
-                                    itemRight.Expression?.Type == typeof(bool))
-                                    expr = Expression.AndAlso(itemLeft.Expression, itemRight.Expression);
-                                else
-                                    expr = Expression.And(GetWordExpression(statePar, itemLeft), GetWordExpression(statePar, itemRight));
-                                break;
-
-                            case TokenType.Or:
-                                if (itemLeft.Expression?.Type == typeof(bool) &&
-                                    itemRight.Expression?.Type == typeof(bool))
-                                    expr = Expression.OrElse(itemLeft.Expression, itemRight.Expression);
-                                else
-                                    expr = Expression.Or(GetWordExpression(statePar, itemLeft), GetWordExpression(statePar, itemRight));
-                                break;
-
-                            default:
-                                if (!tokenTypeMapper.TryGetValue(item.Token.Type, out var func))
-                                    throw new InvalidOperationException($"Unexpected token {tokenName(item.Token.Type)}");
-
-                                expr = func(GetWordExpression(statePar, itemLeft), GetWordExpression(statePar, itemRight));
-                                break;
-                        }
-                        item.Expression = expr;
-                        item.Token.Type = TokenType.None;
-                        list.RemoveAt(i + 1);
-                        if (!isUnary)
-                        {
-                            list.RemoveAt(i - 1);
-                            i--;
-                        }
-                    }
-                }
+                HandleTopStackOperator(valueStack, operatorStack);
             }
 
-            // Check the list bounds
-            // In the end it should be reduced to just one element 
-            if (list.Count > 1)
+            // Check the value stack
+            // In the end it should be reduced to just one element and the operator stack should be empty
+            if (valueStack.Count > 1)
                 throw new InvalidOperationException("Expression not terminated correctly");
-            if (list.Count == 0)
+            if (valueStack.Count == 0)
                 return Expression.Constant(null, typeof(object[]));
-            if (list[0].List != null)
-                return
-                    Expression.NewArrayInit(typeof(object), list[0].List.Select(
-                        // Apply boxing where needed
-                        it => it.Type != typeof(object) ? Expression.Convert(it, typeof(object)) : it
-                    ));
+
+            var expr2 = valueStack.Pop();
 
             // Try to return the final element as an object[] array
-            var expr2 = list[0].Expression;
-            if (expr2 == null)
-                expr2 = GetExpression(statePar, list[0]);
             if (expr2 is ConstantExpression cexpr2 && cexpr2.Value == null)
                 return Expression.NewArrayBounds(typeof(object), Expression.Constant(null));
             if (expr2.Type == typeof(object[]))
                 return expr2;
+            if (expr2 is UnaryExpression conv && conv.Operand is NewArrayExpression expr3)
+                return expr3;
             return
                 Expression.NewArrayInit(typeof(object), expr2.Type != typeof(object) ? Expression.Convert(expr2, typeof(object)) : expr2);
         }
 
         public static Func<State, object[]> Compile(string exprString, int radix)
-         {
+        {
             var tokens = Tokenizer.Tokenize(exprString, radix);
             var statePar = Expression.Parameter(typeof(State), "state");
             var expr = Compile(tokens, statePar);
@@ -312,7 +341,7 @@ namespace Assembler
         public static int? GetInt(string exprString, State state)
         {
             var func = Compile(exprString, state.Radix);
-            var objArr =func(state);
+            var objArr = func(state);
             if (objArr.Length > 1)
                 throw new InvalidOperationException("Single element expected");
             if (objArr.Length == 0 || objArr[0] == null)
