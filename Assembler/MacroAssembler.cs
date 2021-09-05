@@ -102,7 +102,7 @@ namespace Assembler
             {
                 if (String.IsNullOrWhiteSpace(line))
                 {
-                    await outputCollector.Emit(line);
+                    await outputCollector.EmitComment(line);
                     return;
                 }
 
@@ -114,7 +114,7 @@ namespace Assembler
 
                 if (line.StartsWith(';'))
                 {
-                    await outputCollector.Emit(line);
+                    await outputCollector.EmitComment(line);
                     return;
                 }
 
@@ -304,7 +304,7 @@ namespace Assembler
                 if (value < -32768 || value > 65535)
                     throw new InvalidOperationException($"Value out of range for {opcode}");
 
-                // TODO: make endianess dependant on processor architecture
+                // TODO: make endianness dependant on processor architecture
                 return new byte[] { (byte)(value & 0xff), (byte)(value >> 8) };
             }).ToArray();
             return bytes;

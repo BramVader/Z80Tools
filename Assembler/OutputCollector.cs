@@ -20,7 +20,7 @@ namespace Assembler
         private Task EmitLineNr() =>
             listWriter.WriteAsync($"{lineNumber++,5} ");
 
-        public async Task Emit(string comment)
+        public async Task EmitComment(string comment)
         {
             await EmitLineNr();
             await ((String.IsNullOrWhiteSpace(comment))
