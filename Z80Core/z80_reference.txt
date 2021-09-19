@@ -39,34 +39,34 @@ Devin Gardner   -   2000.04.29
 |ADD IY,IY    | 15 | 2 |      |FD 29       |                     |                      |
 |ADD IY,SP    | 15 | 2 |      |FD 39       |                     |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
-|AND r        | 4  | 1 |***P00|A0+rb       |Logical AND          |A=A&s                 |
-|AND N        | 7  | 2 |      |E6 XX       |                     |                      |
-|AND (HL)     | 7  | 1 |      |A6          |                     |                      |
-|AND (IX+N)   | 19 | 3 |      |DD A6 XX    |                     |                      |
-|AND (IY+N)   | 19 | 3 |      |FD A6 XX    |                     |                      |
+|AND ~,r      | 4  | 1 |***P00|A0+rb       |Logical AND          |A=A&s                 |
+|AND ~,N      | 7  | 2 |      |E6 XX       |                     |                      |
+|AND ~,(HL)   | 7  | 1 |      |A6          |                     |                      |
+|AND ~,(IX+N) | 19 | 3 |      |DD A6 XX    |                     |                      |
+|AND ~,(IY+N) | 19 | 3 |      |FD A6 XX    |                     |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
 |BIT b,r      | 8  | 2 |?*1?0-|CB 40+8*b+rb|Test Bit             |m&{2^b}               |
 |BIT b,(HL)   | 12 | 2 |      |CB 46+8*b   |                     |                      |
 |BIT b,(IX+N) | 20 | 4 |      |DD CB XX 46+8*b                   |                      |
 |BIT b,(IY+N) | 20 | 4 |      |FD CB XX 46+8*b                   |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
-|CALL NN      | 17 | 3 |------|CD XX XX    |Unconditional Call   |-(SP)=PC,PC=nn        |
-|CALL C,NN    |17/1| 3 |------|DC XX XX    |Conditional Call     |If Carry = 1          |
-|CALL NC,NN   |17/1| 3 |      |D4 XX XX    |                     |If carry = 0          |
-|CALL M,NN    |17/1| 3 |      |FC XX XX    |                     |If Sign = 1 (negative)|
-|CALL P,NN    |17/1| 3 |      |F4 XX XX    |                     |If Sign = 0 (positive)|
-|CALL Z,NN    |17/1| 3 |      |CC XX XX    |                     |If Zero = 1 (ans.=0)  |
-|CALL NZ,NN   |17/1| 3 |      |C4 XX XX    |                     |If Zero = 0 (non-zero)|
-|CALL PE,NN   |17/1| 3 |      |EC XX XX    |                     |If Parity = 1 (even)  |
-|CALL PO,NN   |17/1| 3 |      |E4 XX XX    |                     |If Parity = 0 (odd)   |
+|CALL $NN     | 17 | 3 |------|CD XX XX    |Unconditional Call   |-(SP)=PC,PC=nn        |
+|CALL C,$NN   |17/1| 3 |------|DC XX XX    |Conditional Call     |If Carry = 1          |
+|CALL NC,$NN  |17/1| 3 |      |D4 XX XX    |                     |If carry = 0          |
+|CALL M,$NN   |17/1| 3 |      |FC XX XX    |                     |If Sign = 1 (negative)|
+|CALL P,$NN   |17/1| 3 |      |F4 XX XX    |                     |If Sign = 0 (positive)|
+|CALL Z,$NN   |17/1| 3 |      |CC XX XX    |                     |If Zero = 1 (ans.=0)  |
+|CALL NZ,$NN  |17/1| 3 |      |C4 XX XX    |                     |If Zero = 0 (non-zero)|
+|CALL PE,$NN  |17/1| 3 |      |EC XX XX    |                     |If Parity = 1 (even)  |
+|CALL PO,$NN  |17/1| 3 |      |E4 XX XX    |                     |If Parity = 0 (odd)   |
 +-------------+----+---+------+------------+---------------------+----------------------+
 |CCF          | 4  | 1 |--?-0*|3F          |Complement Carry Flag|CY=~CY                |
 +-------------+----+---+------+------------+---------------------+----------------------+
-|CP r         | 4  | 1 |***V1*|B8+rb       |Compare              |Compare A-s           |
-|CP N         | 7  | 2 |      |FE XX       |                     |                      |
-|CP (HL)      | 7  | 1 |      |BE          |                     |                      |
-|CP (IX+N)    | 19 | 3 |      |DD BE XX    |                     |                      |
-|CP (IY+N)    | 19 | 3 |      |FD BE XX    |                     |                      |
+|CP ~,r       | 4  | 1 |***V1*|B8+rb       |Compare              |Compare A-s           |
+|CP ~,N       | 7  | 2 |      |FE XX       |                     |                      |
+|CP ~,(HL)    | 7  | 1 |      |BE          |                     |                      |
+|CP ~,(IX+N)  | 19 | 3 |      |DD BE XX    |                     |                      |
+|CP ~,(IY+N)  | 19 | 3 |      |FD BE XX    |                     |                      |
 |CPD          | 16 | 2 |****1-|ED A9       |Compare and Decrement|A-(HL),HL=HL-1,BC=BC-1|
 |CPDR         |21/1| 2 |****1-|ED B9       |Compare, Dec., Repeat|CPD till A=(HL)or BC=0|
 |CPI          | 16 | 2 |****1-|ED A1       |Compare and Increment|A-(HL),HL=HL+1,BC=BC-1|
@@ -245,11 +245,11 @@ Devin Gardner   -   2000.04.29
 +-------------+----+---+------+------------+---------------------+----------------------+
 |NOP          | 4  | 1 |------|00          |No Operation         |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
-|OR r         | 4  | 1 |***P00|B0+rb       |Logical inclusive OR |A=Avs                 |
-|OR N         | 7  | 2 |      |F6 XX       |                     |                      |
-|OR (HL)      | 7  | 1 |      |B6          |                     |                      |
-|OR (IX+N)    | 19 | 3 |      |DD B6 XX    |                     |                      |
-|OR (IY+N)    | 19 | 3 |      |FD B6 XX    |                     |                      |
+|OR ~,r       | 4  | 1 |***P00|B0+rb       |Logical inclusive OR |A=Avs                 |
+|OR ~,N       | 7  | 2 |      |F6 XX       |                     |                      |
+|OR ~,(HL)    | 7  | 1 |      |B6          |                     |                      |
+|OR ~,(IX+N)  | 19 | 3 |      |DD B6 XX    |                     |                      |
+|OR ~,(IY+N)  | 19 | 3 |      |FD B6 XX    |                     |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
 |OUT (N),A    | 11 | 2 |------|D3 XX       |Output               |(n)=A                 |
 |OUT (C),0    | 12 | 2 |------|ED 71       |Output*              |         (Unsupported)|
@@ -329,11 +329,11 @@ Devin Gardner   -   2000.04.29
 |RST 30H      | 11 | 1 |      |F7          |                     |                      |
 |RST 38H      | 11 | 1 |      |FF          |                     |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
-|SBC r        | 4  | 1 |***V1*|98+rb       |Subtract with Carry  |A=A-s-CY              |
+|SBC ~,r      | 4  | 1 |***V1*|98+rb       |Subtract with Carry  |A=A-s-CY              |
 |SBC A,N      | 7  | 2 |      |DE XX       |                     |                      |
-|SBC (HL)     | 7  | 1 |      |9E          |                     |                      |
-|SBC A,(IX+N) | 19 | 3 |      |DD 9E XX    |                     |                      |
-|SBC A,(IY+N) | 19 | 3 |      |FD 9E XX    |                     |                      |
+|SBC ~,(HL)   | 7  | 1 |      |9E          |                     |                      |
+|SBC ~,(IX+N) | 19 | 3 |      |DD 9E XX    |                     |                      |
+|SBC ~,(IY+N) | 19 | 3 |      |FD 9E XX    |                     |                      |
 |SBC HL,BC    | 15 | 2 |**?V1*|ED 42       |Subtract with Carry  |HL=HL-ss-CY           |
 |SBC HL,DE    | 15 | 2 |      |ED 52       |                     |                      |
 |SBC HL,HL    | 15 | 2 |      |ED 62       |                     |                      |
@@ -364,17 +364,17 @@ Devin Gardner   -   2000.04.29
 |SRL (IX+N)   | 23 | 4 |      |DD CB XX 3E |                     |                      |
 |SRL (IY+N)   | 23 | 4 |      |FD CB XX 3E |                     |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
-|SUB r        | 4  | 1 |***V1*|90+rb       |Subtract             |A=A-s                 |
-|SUB N        | 7  | 2 |      |D6 XX       |                     |                      |
-|SUB (HL)     | 7  | 1 |      |96          |                     |                      |
-|SUB (IX+N)   | 19 | 3 |      |DD 96 XX    |                     |                      |
-|SUB (IY+N)   | 19 | 3 |      |FD 96 XX    |                     |                      |
+|SUB ~,r      | 4  | 1 |***V1*|90+rb       |Subtract             |A=A-s                 |
+|SUB ~,N      | 7  | 2 |      |D6 XX       |                     |                      |
+|SUB ~,(HL)   | 7  | 1 |      |96          |                     |                      |
+|SUB ~,(IX+N) | 19 | 3 |      |DD 96 XX    |                     |                      |
+|SUB ~,(IY+N) | 19 | 3 |      |FD 96 XX    |                     |                      |
 +-------------+----+---+------+------------+---------------------+----------------------+
-|XOR r        | 4  | 1 |***P00|A8+rb       |Logical Exclusive OR |A=Axs                 |
-|XOR N        | 7  | 2 |      |EE XX       |                     |                      |
-|XOR (HL)     | 7  | 1 |      |AE          |                     |                      |
-|XOR (IX+N)   | 19 | 3 |      |DD AE XX    |                     |                      |
-|XOR (IY+N)   | 19 | 3 |      |FD AE XX    |                     |                      |
+|XOR ~,r      | 4  | 1 |***P00|A8+rb       |Logical Exclusive OR |A=Axs                 |
+|XOR ~,N      | 7  | 2 |      |EE XX       |                     |                      |
+|XOR ~,(HL)   | 7  | 1 |      |AE          |                     |                      |
+|XOR ~,(IX+N) | 19 | 3 |      |DD AE XX    |                     |                      |
+|XOR ~,(IY+N) | 19 | 3 |      |FD AE XX    |                     |                      |
 -------------+----+---+------+------------+---------------------+----------------------
 
 Clck = The time it takes to execute the instruction in CPU cycles.

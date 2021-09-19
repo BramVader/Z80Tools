@@ -37,70 +37,6 @@ namespace Assembler
             TokenType.Not
         };
 
-        private static readonly MethodInfo stateGetSymbolMethod = typeof(State).GetMethod(nameof(State.GetSymbol));
-        private static readonly MethodInfo stateGetLocationCounterMethod = typeof(State).GetMethod(nameof(State.GetLocationCounter));
-
-        private static Expression GetExpression(ParameterExpression statePar, Token token)
-        {
-            Expression expr = token.Type switch
-            {
-                TokenType.Symbol =>
-                    Expression.Call(statePar, stateGetSymbolMethod, Expression.Constant((string)token.Value)),
-                TokenType.Number => Expression.Constant((int)token.Value),
-                TokenType.String => Expression.Constant((string)token.Value),
-                TokenType.LocationCounter =>
-                    Expression.Call(statePar, stateGetLocationCounterMethod),
-                _ => throw new InvalidOperationException("Integer constant or symbol expected"),
-            };
-            if (expr is NewArrayExpression nexp)
-                expr = nexp.Expressions[0];
-            if (expr is UnaryExpression uexp)
-                expr = uexp.Operand;
-            return expr;
-        }
-
-        private static string TokenName(TokenType type) => type.ToString().ToUpper();
-
-        private static Expression ExpectNumber(Expression expr)
-        {
-            if (expr.Type == typeof(object[]))
-            {
-                expr = ExpectNumber(Expression.ArrayAccess(expr, Expression.Constant(0)));
-            }
-            else
-            if (expr.Type == typeof(object))
-            {
-                expr = Expression.Convert(expr, typeof(int));
-            }
-            else
-            if (expr.Type != typeof(int))
-            {
-                throw new InvalidOperationException("Numeric value expected");
-            }
-            return expr;
-        }
-
-        private static Expression HandleUnary(Token token, Expression o)
-        {
-            switch (token.Type)
-            {
-                case TokenType.Nul:
-                    return Expression.Equal(o, Expression.Constant((int?)null));
-                case TokenType.Low:
-                    return Expression.And(o, Expression.Constant(0x00FF));
-                case TokenType.High:
-                    return Expression.RightShift(o, Expression.Constant(8));
-                case TokenType.Neg:
-                    return Expression.Negate(o);
-                case TokenType.Not:
-                    if (o == null || o.Type != typeof(bool))
-                        throw new InvalidOperationException("Boolean expression missing to the right of NOT");
-                    return Expression.Not(o);
-                default:
-                    throw new InvalidOperationException($"Unknown unary expression: {token.Type}");
-            }
-        }
-
         private static readonly Dictionary<TokenType, Func<Expression, Expression, BinaryExpression>> binaryExprMapper = new()
         {
             [TokenType.Multiply] = Expression.Multiply,
@@ -121,29 +57,141 @@ namespace Assembler
             [TokenType.Xor] = Expression.ExclusiveOr
         };
 
-        private static Expression HandleBinary(Token token, Expression b, Expression a)
+        private static readonly MethodInfo stateGetSymbolMethod = typeof(State).GetMethod(nameof(State.GetSymbol));
+        private static readonly MethodInfo stateGetLocationCounterMethod = typeof(State).GetMethod(nameof(State.GetLocationCounter));
+
+        private static string TokenName(TokenType type) => type.ToString().ToUpper();
+
+        public static int ExpectNumber(object data, bool allowNull = false)
+        {
+            if (data == null)
+                if (!allowNull)
+                    throw new InvalidOperationException($"Number expression evaluates to null");
+                else
+                    return 0;
+
+            switch (data)
+            {
+                case int v:
+                    return v;
+                case string s:
+                    return s.Length switch
+                    {
+                        0 => 0,
+                        1 => s[0],
+                        2 => s[0] | (s[1] << 8),
+                        _ => throw new InvalidOperationException("To be able to interpret a string as a number, it must be 0, 1 or 2 chars long"),
+                    };
+                    ;
+                case object[] arr:
+                    if (arr.Length == 0 && allowNull)
+                        return 0;
+                    if (arr.Length != 1)
+                        throw new InvalidOperationException("To be able to interpret an array as a number, it contain exactly one element");
+                    return ExpectNumber(arr[0], allowNull);
+                default:
+                    throw new InvalidOperationException($"Unable to convert a {data.GetType().Name} to a number");
+            }
+        }
+
+        public static bool ExpectBool(object data, bool allowNull = false)
+        {
+            if (data == null)
+                if (!allowNull)
+                    throw new InvalidOperationException($"Boolean expression evaluates to null");
+                else
+                    return false;
+
+            switch (data)
+            {
+                case bool b:
+                    return b;
+                case int v:
+                    return v != 0;
+                case string s:
+                    int w = s.Length switch
+                    {
+                        0 => 0,
+                        1 => s[0],
+                        2 => s[0] | (s[1] << 8),
+                        _ => throw new InvalidOperationException("To be able to interpret a string as a boolean, it must be 0, 1 or 2 chars long"),
+                    };
+                    return w != 0;
+                case object[] arr:
+                    if (arr.Length == 0 && allowNull)
+                        return false;
+                    if (arr.Length != 1)
+                        throw new InvalidOperationException("To be able to interpret an array as a boolean, it contain exactly one element");
+                    return ExpectBool(arr[0], allowNull);
+                default:
+                    throw new InvalidOperationException($"Unable to convert a {data.GetType().Name} to a boolean");
+            }
+        }
+
+        private static readonly Expression<Action> expectNumberMethodFinder = () => ExpectNumber((object)null, false);
+        private static readonly Expression<Action> expectBoolMethodFinder = () => ExpectBool((object)null, false);
+        private static readonly MethodInfo expectNumberMethod = (expectNumberMethodFinder.Body as MethodCallExpression).Method;
+        private static readonly MethodInfo expectBoolMethod = (expectBoolMethodFinder.Body as MethodCallExpression).Method;
+
+        private static Expression ExpectNumber(Expression expr, ParameterExpression statePar)
+        {
+            if (expr.Type == typeof(int)) return expr;
+            return Expression.Call(null, expectNumberMethod, expr.Type == typeof(object) ? expr : Expression.Convert(expr, typeof(object)), Expression.Equal(Expression.Property(statePar, nameof(State.Pass)), Expression.Constant(0)));
+        }
+
+        private static Expression ExpectBool(Expression expr, ParameterExpression statePar)
+        {
+            if (expr.Type == typeof(bool)) return expr;
+            return Expression.Call(null, expectBoolMethod, expr.Type == typeof(object) ? expr : Expression.Convert(expr, typeof(object)), Expression.Equal(Expression.Property(statePar, nameof(State.Pass)), Expression.Constant(0)));
+        }
+
+        private static Expression HandleUnary(Token token, Expression o, ParameterExpression statePar)
+        {
+            switch (token.Type)
+            {
+                case TokenType.Nul:
+                    return Expression.Equal(o, Expression.Constant((int?)null));
+                case TokenType.Low:
+                    return Expression.And(ExpectNumber(o, statePar), Expression.Constant(0x00FF));
+                case TokenType.High:
+                    return Expression.RightShift(ExpectNumber(o, statePar), Expression.Constant(8));
+                case TokenType.Neg:
+                    return Expression.Negate(ExpectNumber(o, statePar));
+                case TokenType.Not:
+                    if (o == null || o.Type != typeof(bool))
+                        throw new InvalidOperationException("Boolean expression missing to the right of NOT");
+                    return Expression.Not(o);
+                default:
+                    throw new InvalidOperationException($"Unknown unary expression: {token.Type}");
+            }
+        }
+
+        private static Expression HandleBinary(Token token, Expression b, Expression a, ParameterExpression statePar)
         {
             switch (token.Type)
             {
                 case TokenType.And:
                     if (a.Type == typeof(bool) &&
                         b.Type == typeof(bool))
-                        return Expression.AndAlso(a, b);
+                        return Expression.AndAlso(ExpectBool(a, statePar), ExpectBool(b, statePar));
                     else
-                        return Expression.And(ExpectNumber(a), ExpectNumber(b));
+                        return Expression.And(ExpectNumber(a, statePar), ExpectNumber(b, statePar));
 
                 case TokenType.Or:
                     if (a.Type == typeof(bool) &&
                         b.Type == typeof(bool))
-                        return Expression.OrElse(a, b);
+                        return Expression.OrElse(ExpectBool(a, statePar), ExpectBool(b, statePar));
                     else
-                        return Expression.Or(ExpectNumber(a), ExpectNumber(b));
+                        return Expression.Or(ExpectNumber(a, statePar), ExpectNumber(b, statePar));
 
                 default:
                     if (!binaryExprMapper.TryGetValue(token.Type, out var func))
                         throw new InvalidOperationException($"Unexpected token {TokenName(token.Type)}");
-
-                    return func(ExpectNumber(a), ExpectNumber(b));
+                    if (a.Type == typeof(bool) &&
+                        b.Type == typeof(bool))
+                        return func(ExpectBool(a, statePar), ExpectBool(b, statePar));
+                    else
+                        return func(ExpectNumber(a, statePar), ExpectNumber(b, statePar));
             }
         }
 
@@ -176,10 +224,9 @@ namespace Assembler
                 o = Expression.NewArrayInit(typeof(object), o);
             }
             return o;
-
         }
 
-        private static void HandleTopStackOperator(Stack<Expression> valueStack, Stack<Token> operatorStack)
+        private static void HandleTopStackOperator(Stack<Expression> valueStack, Stack<Token> operatorStack, ParameterExpression statePar)
         {
             var topToken = operatorStack.Pop();
             switch (topToken.Type)
@@ -202,7 +249,8 @@ namespace Assembler
                     {
                         valueStack.Push(HandleUnary(
                             topToken,
-                            valueStack.Pop()
+                            valueStack.Pop(),
+                            statePar
                         ));
                     }
                     else
@@ -210,7 +258,8 @@ namespace Assembler
                         valueStack.Push(HandleBinary(
                             topToken,
                             valueStack.Pop(),
-                            valueStack.Pop()
+                            valueStack.Pop(),
+                            statePar
                         ));
                     }
                     break;
@@ -218,7 +267,7 @@ namespace Assembler
         }
 
         // Closes a possible list by wrapping it into an object (so it will not grow anymore
-        // an possibly become an element of a parent list).
+        // and possibly become an element of a parent list).
         private static void MaybeCloseList(Stack<Expression> valueStack, Stack<Token> operatorStack)
         {
             if (operatorStack.TryPeek(out var topToken) && topToken.Type == TokenType.OpenListParen &&
@@ -242,8 +291,14 @@ namespace Assembler
                     case TokenType.Number:
                         valueStack.Push(Expression.Constant((int)token.Value));
                         break;
+                    case TokenType.String:
+                        valueStack.Push(Expression.Constant((string)token.Value));
+                        break;
                     case TokenType.Symbol:
-                        valueStack.Push(GetExpression(statePar, token));
+                        valueStack.Push(Expression.Call(statePar, stateGetSymbolMethod, Expression.Constant((string)token.Value)));
+                        break;
+                    case TokenType.LocationCounter:
+                        valueStack.Push(Expression.Call(statePar, stateGetLocationCounterMethod));
                         break;
                     case TokenType.OpenParen:
                     case TokenType.OpenListParen:
@@ -256,7 +311,7 @@ namespace Assembler
                             operatorStack.Peek().Type != TokenType.OpenListParen
                         )
                         {
-                            HandleTopStackOperator(valueStack, operatorStack);
+                            HandleTopStackOperator(valueStack, operatorStack, statePar);
                         }
                         MaybeCloseList(valueStack, operatorStack);
                         operatorStack.Pop(); // Pop and discard the opening paren
@@ -271,7 +326,7 @@ namespace Assembler
                                 (!precedence.TryGetValue(topToken.Type, out int topPrec) ||
                                 topPrec <= prec))
                             {
-                                HandleTopStackOperator(valueStack, operatorStack);
+                                HandleTopStackOperator(valueStack, operatorStack, statePar);
                             }
                             operatorStack.Push(token);
                         }
@@ -285,7 +340,7 @@ namespace Assembler
             }
             while (operatorStack.Count > 0)
             {
-                HandleTopStackOperator(valueStack, operatorStack);
+                HandleTopStackOperator(valueStack, operatorStack, statePar);
             }
 
             // Check the value stack
@@ -326,27 +381,13 @@ namespace Assembler
         public static bool? GetBool(string exprString, State state)
         {
             var func = Compile(exprString, state.Radix);
-            var objArr = func(state);
-            if (objArr.Length > 1)
-                throw new InvalidOperationException("Single element expected");
-            if (objArr.Length == 0 || objArr[0] == null)
-                return null;
-            if (objArr[0].GetType() != typeof(bool))
-                throw new InvalidOperationException("Boolean value expected");
-            return (bool)objArr[0];
+            return Compiler.ExpectBool(func(state));
         }
 
         public static int? GetInt(string exprString, State state)
         {
             var func = Compile(exprString, state.Radix);
-            var objArr = func(state);
-            if (objArr.Length > 1)
-                throw new InvalidOperationException("Single element expected");
-            if (objArr.Length == 0 || objArr[0] == null)
-                return null;
-            if (objArr[0].GetType() != typeof(int))
-                throw new InvalidOperationException("Integer value expected");
-            return (int)objArr[0];
+            return Compiler.ExpectNumber(func(state));
         }
     }
 }

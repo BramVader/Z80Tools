@@ -1,9 +1,11 @@
-﻿using Disassembler;
+﻿using BdosCpm;
+using Disassembler;
 using Emulator;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -24,7 +26,7 @@ namespace Z80TestConsole
         private readonly BaseDisassembler disassembler;
         private readonly List<Breakpoint> breakpoints;
         private readonly BaseRegisters lastRegisters = new Z80Core.Z80Registers();
-        private readonly HardwareModel model = new CPCAmstrad.CPC464Model();
+        private readonly HardwareModel model;
         private readonly bool[] memorySwitch;
         private readonly bool[] lastEmulatorMemorySwitch;
 
@@ -32,11 +34,13 @@ namespace Z80TestConsole
         {
             InitializeComponent();
 
+            breakpoints = new List<Breakpoint>();
+            //(var model, var symbols) = LoadCpc464HardwareModel();
+            (var model, var symbols) = LoadBdosHardwareModel();
+
             memorySwitch = (bool[])model.MemorySwitch.Clone();
             lastEmulatorMemorySwitch = (bool[])model.MemorySwitch.Clone();
-            InitRam();
-
-            breakpoints = new List<Breakpoint>();
+            //InitRam();
 
             model.Emulator.Registers.CloneTo(lastRegisters);
             model.Emulator.OnRunComplete += (sender, args) =>
@@ -47,11 +51,13 @@ namespace Z80TestConsole
                     this.Invoke(del);
                 }
                 else
+                {
                     this.RunComplete();
+                }
             };
 
-            var symbols = Symbols.Load("Jumptable.txt");
             disassembler = new Z80Core.Z80Disassembler(false, symbols);
+            this.model = model;
 
             UpdateMemory(0);
             UpdateDisassembly(0);
@@ -61,6 +67,17 @@ namespace Z80TestConsole
             memoryListBox.RequestPage += RequestMemoryPage;
 
             UpdateMemoryCheckboxList(memorySwitch);
+        }
+
+        private (HardwareModel, Symbols) LoadCpc464HardwareModel()
+        {
+            return (new CPCAmstrad.CPC464Model(), Symbols.Load("Jumptable.txt"));
+        }
+
+        private (HardwareModel, Symbols) LoadBdosHardwareModel()
+        {
+            var model = new BdosModel();
+            return (new BdosModel(), model.Symbols);
         }
 
         private void InitRam()
@@ -216,7 +233,7 @@ namespace Z80TestConsole
 
         /// <summary>
         /// Corrects the address by checking if the address is somewhere inbetween a range of opcodes of an instruction.
-        /// if correctUp = false, the address is corrected to the first opcode of the instructen, if true the address is corrected to 
+        /// if correctUp = false, the address is corrected to the first opcode of the instructen, if true the address is corrected to
         /// the next instruction.
         /// </summary>
         /// <param name="address"></param>
@@ -796,12 +813,13 @@ namespace Z80TestConsole
                     if (bpIndex < 0)
                     {
                         breakpoints.Insert(~bpIndex, newBp);
+                        model.Emulator.AddBreakpoint(newBp);
                     }
                     else
                     {
                         breakpoints.RemoveAt(bpIndex);
+                        model.Emulator.RemoveBreakpoint(newBp.Address);
                     }
-                    model.Emulator.UpdateBreakpoints(breakpoints);
                     disassemblyListBox.Refresh();
                 }
             }
@@ -885,5 +903,9 @@ namespace Z80TestConsole
             timer1.Enabled = checkBoxUpdateScreen.Checked;
         }
 
+        private void openRomToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }

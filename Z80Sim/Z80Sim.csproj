@@ -42,6 +42,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Assembler\Assembler.csproj" />
+    <ProjectReference Include="..\BdosCpm\BdosCpm.csproj" />
     <ProjectReference Include="..\CPCAmstrad\CPCAmstrad.csproj" />
     <ProjectReference Include="..\Emulator\Emulator.csproj" />
     <ProjectReference Include="..\Z80Core\Z80Core.csproj" />

@@ -10,25 +10,35 @@ namespace Assembler
     {
         private readonly List<MemorySegment> segments = new();
         private readonly TextWriter listWriter;
-        private int lineNumber = 1;
+        private int lastLineNumber = 1;
 
         public OutputCollector(TextWriter listWriter)
         {
             this.listWriter = listWriter;
         }
 
-        private Task EmitLineNr() =>
-            listWriter.WriteAsync($"{lineNumber++,5} ");
-
-        public async Task EmitComment(string comment)
+        private async Task EmitLineNr(int lineNumber)
         {
-            await EmitLineNr();
+            if (lineNumber != lastLineNumber)
+            {
+                await listWriter.WriteAsync($"{lineNumber,5} ");
+                lastLineNumber = lineNumber;
+            }
+            else
+            {
+                await listWriter.WriteAsync($"{' ',5} ");
+            }
+        }
+
+        public async Task EmitComment(int lineNr, string comment)
+        {
+            await EmitLineNr(lineNr);
             await ((String.IsNullOrWhiteSpace(comment))
                 ? listWriter.WriteLineAsync()
                 : listWriter.WriteLineAsync($"{' ',-13}{comment}"));
         }
 
-        public async Task Emit(string label, int address, byte[] bytes, string opcode, string operands, string comment)
+        public async Task Emit(int lineNr, string label, int address, byte[] bytes, string opcode, string operands, string comment)
         {
             // Add the bytes
             if (bytes != null)
@@ -43,12 +53,42 @@ namespace Assembler
             }
 
             int? addr = bytes != null ? address : null;
-            string byteFmt = bytes != null ? String.Join(" ", bytes.Select(it => it.ToString("X2"))) : null;
-            await EmitLineNr();
-            await listWriter.WriteLineAsync(
-                $"{label,-12} {addr,-4:X4} {byteFmt,-11}  {opcode,-5} {operands,-12}  {comment}"
-            );
+            for (int n = 0; n < (bytes?.Length).GetValueOrDefault(); n+=4)
+            {
+                string byteFmt = bytes != null
+                    ? String.Join(" ", bytes.Skip(n).Take(4).Select(it => it.ToString("X2")))
+                    : null;
+                await EmitLineNr(lineNr);
+                if (n == 0)
+                {
+                    await listWriter.WriteLineAsync(
+                        $"{label,-12} {addr,-4:X4}: {byteFmt,-11}  {opcode,-5} {operands,-12}  {comment}"
+                    );
+                }
+                else
+                {
+                    await listWriter.WriteLineAsync(
+                        $"{' ',-12} {addr + n,-4:X4}: {byteFmt,-11}"
+                    );
+                }
+            }
         }
+
+        internal async Task WrapUp(State state)
+        {
+            await listWriter.WriteLineAsync();
+            await listWriter.WriteLineAsync("Symbols");
+            await listWriter.WriteLineAsync("-------");
+            foreach (var symbol in state.Symbols)
+            {
+                await listWriter.WriteLineAsync(
+                    $"{' ',-12} {MacroAssembler.ValueToString(symbol.Value), -4}: {symbol.Name,-11}"
+                ); ;
+            }
+            listWriter.Close();
+        }
+
+        public IEnumerable<MemorySegment> Segments => segments;
     }
 
 }

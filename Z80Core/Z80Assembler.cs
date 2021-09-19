@@ -46,7 +46,9 @@ namespace Z80Core
             ["b"] = OperandType.Bit           // -> 8*b
         };
 
-        static readonly Regex placeholdersRegex = new(String.Join("|", operandTypeMap.Select(it => $"(?:{Regex.Escape(it.Key)})")), RegexOptions.Compiled);
+        static readonly Regex placeholdersRegex = new(
+            "(?:" + String.Join("|", operandTypeMap.Select(it => $"(?:{Regex.Escape(it.Key)})")) + @")(?!\w)",
+            RegexOptions.Compiled);
 
         private static Instruction DecodeInstruction(string opcode, string operands, string bytes)
         {
@@ -109,7 +111,7 @@ namespace Z80Core
             if (instructions != null) return;
             var assembly = typeof(Z80Assembler).Assembly;
 
-            // Downloaded from https://www.ticalc.org/pub/text/z80/z80_reference.txt
+            // Downloaded from https://www.ticalc.org/pub/text/z80/z80_reference.txt and modified
             // Copyright 2000.04.29 by Devin Gardner
             var streamName = assembly.GetManifestResourceNames().First(it => it.Contains("z80_reference.txt"));
             using var sr = new StreamReader(assembly.GetManifestResourceStream(streamName));
@@ -118,39 +120,55 @@ namespace Z80Core
             var lineRegex = new Regex(@"\|([A-Z]+)\s+([^\s|]+)?\s*\|.*?\|.*?\|.*?\|(.+?)\s*\|", RegexOptions.Compiled);
             while (!sr.EndOfStream)
             {
-                var line = await sr.ReadLineAsync();
-                var match = lineRegex.Match(line);
-                if (match.Success)
+                var rawline = await sr.ReadLineAsync();
+                var lines =
+                    rawline.Contains("~,")
+                    ? new[] { rawline.Replace("~,", ""), rawline.Replace("~,", "A,") }
+                    : new[] { rawline };
+                foreach (string line in lines)
                 {
-                    string opcode = match.Groups[1].Value;
-                    string operands = match.Groups[2].Value;
-                    string bytes = match.Groups[3].Value;
-
-                    // Flatten the register instructions (containing "r")
-                    if (operands.Contains('r'))
+                    var match = lineRegex.Match(line);
+                    if (match.Success)
                     {
-                        // null because (HL) is mentioned separately
-                        for (int j = 0; j < 8; j++)
+                        string opcode = match.Groups[1].Value;
+                        string operands = match.Groups[2].Value;
+                        string bytes = match.Groups[3].Value;
+
+                        // Flatten the register instructions (containing "r")
+                        if (operands.Contains('r'))
                         {
-                            if (regs[j] != null)
+                            // null because (HL) is mentioned separately
+                            for (int j = 0; j < 8; j++)
                             {
-                                list.Add(DecodeInstruction(opcode, operands.Replace("r", regs[j]), bytes.Replace("rb", j.ToString())));
+                                if (regs[j] != null)
+                                {
+                                    list.Add(DecodeInstruction(opcode, operands.Replace("r", regs[j]), bytes.Replace("rb", j.ToString())));
+                                }
                             }
                         }
-                    }
-                    else
-                    {
-                        list.Add(DecodeInstruction(opcode, operands, bytes));
+                        else
+                        {
+                            list.Add(DecodeInstruction(opcode, operands, bytes));
+                        }
                     }
                 }
             }
             instructions = list.ToLookup(it => it.Opcode);
         }
 
-        private static int MapOperand(State state, string expr, OperandType operandType)
+        private static int MapOperand(State state, string expr, OperandType operandType, Instruction instruction)
         {
             // TODO: Handle operandType such as bit (check 0..7) and relative addresses
-            return ParseInt(state, expr);
+            switch (operandType)
+            {
+                case OperandType.Relative:
+                    var offset = ParseInt(state, expr) - state.Address - instruction.Bytes.Count();
+                    if (state.Pass == 2 && (offset < -128 || offset > 127))
+                        throw new InvalidOperationException("Relative offset out of range");
+                    return offset & 0xFF;
+                default:
+                    return ParseInt(state, expr);
+            }
         }
 
         protected override byte[] ParseOpcode(State state, OutputCollector outputCollector, string label, string opcode, string operands, string comment)
@@ -161,9 +179,9 @@ namespace Z80Core
             if (instruction == null) return null;
 
             var values = instruction.Match.Groups.OfType<Group>()
-
-                .Select(it => it.Value).Skip(1)
-                .Zip(instruction.Instruction.OperandTypes, (a, b) => MapOperand(state, a, b))
+                .Skip(1)  // Group 0 is the complete match
+                .Select(it => it.Value)
+                .Zip(instruction.Instruction.OperandTypes, (a, b) => MapOperand(state, a, b, instruction.Instruction))
                 .ToArray();
 
             return instruction.Instruction.Bytes.Select(it => it(values)).ToArray();

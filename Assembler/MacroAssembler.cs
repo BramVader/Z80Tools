@@ -21,14 +21,27 @@ namespace Assembler
 
         public async Task Assemble(OutputCollector outputCollector, StreamReader sr)
         {
+            if (!sr.BaseStream.CanSeek)
+                throw new InvalidOperationException("Cannot seek. Because of the 2-pass compile process, the stream must be rewindable");
+
             var state = new State();
             await Initialize();
-            while (!sr.EndOfStream)
+            for (int pass = 0; pass < 2; pass++)
             {
-                state.LineNr++;
-                string line = await sr.ReadLineAsync();
-                await AssembleLine(line, state, outputCollector);
+                state.Pass = pass;
+                while (!sr.EndOfStream)
+                {
+                    state.LineNr++;
+                    string line = await sr.ReadLineAsync();
+                    await AssembleLine(line, state, outputCollector);
+                }
+                if (pass == 0)
+                {
+                    state.ClearExeptSymbols();
+                    sr.BaseStream.Position = 0;
+                }
             }
+            await outputCollector.WrapUp(state);
         }
 
         protected abstract byte[] ParseOpcode(State state, OutputCollector outputCollector, string label, string opcode, string operands, string comment);
@@ -40,10 +53,8 @@ namespace Assembler
             if (String.IsNullOrEmpty(data))
                 throw new InvalidOperationException($"Integer expression expected");
 
-            int? val = Compiler.GetInt(data, state);
-            if (!val.HasValue && state.Pass == 2)
-                throw new InvalidOperationException($"Integer expression evaluates to null");
-            return val.GetValueOrDefault();
+            var objArr = Compiler.Get(data, state);
+            return Compiler.ExpectNumber(objArr, state.Pass == 0);
         }
 
         protected static bool ParseBool(State state, string data)
@@ -51,10 +62,8 @@ namespace Assembler
             if (String.IsNullOrEmpty(data))
                 throw new InvalidOperationException($"Boolean expression expected");
 
-            bool? val = Compiler.GetBool(data, state);
-            if (!val.HasValue && state.Pass == 2)
-                throw new InvalidOperationException($"Boolean expression evaluates to null");
-            return val.GetValueOrDefault();
+            var objArr = Compiler.Get(data, state);
+            return Compiler.ExpectBool(objArr, state.Pass == 0);
         }
 
         protected static int[] ParseIntArray(State state, string data)
@@ -68,12 +77,33 @@ namespace Assembler
             return objArr.Cast<int>().ToArray();
         }
 
+        public static string ValueToString(object val)
+        {
+            return val switch
+            {
+                null => "NULL",
+                int v => v.ToString("X4"),
+                string v => $"\"{v}\"",
+                object[] arr => String.Join(", ", arr.Select(it => ValueToString(it))),
+                _ => val.ToString()
+            };
+        }
+
         private async Task ExpandMacro(Macro macro, string operands, State state, OutputCollector outputCollector)
         {
             var macroState = state.BeginMacroExpansion(macro);
             var arguments = Compiler.Get(operands, state);
             macroState.SetArguments(arguments);
 
+            // Document the macro arguments
+            if (state.Pass == 1)
+            {
+                await outputCollector.EmitComment(state.LineNr, $"; CALLING {macro.Name}");
+                foreach (var it in macroState.Macro.ParNames.Select((it, i) => new { Name = it, Value = i < arguments.Length ? arguments[i] : null }))
+                {
+                    await outputCollector.EmitComment(state.LineNr, $"; - {it.Name}: {ValueToString(it.Value)}");
+                }
+            }
             foreach (var line in macro.Lines)
             {
                 await AssembleLine(line, state, outputCollector);
@@ -102,10 +132,12 @@ namespace Assembler
             {
                 if (String.IsNullOrWhiteSpace(line))
                 {
-                    await outputCollector.EmitComment(line);
+                    if (state.Pass == 1)
+                        await outputCollector.EmitComment(state.LineNr, line);
                     return;
                 }
 
+                // TODO handle block comments correctly
                 if (state.Mode == Mode.BlockComment)
                 {
                     state.AddLineToBlockComment(line);
@@ -114,7 +146,8 @@ namespace Assembler
 
                 if (line.StartsWith(';'))
                 {
-                    await outputCollector.EmitComment(line);
+                    if (state.Pass == 1)
+                        await outputCollector.EmitComment(state.LineNr, line);
                     return;
                 }
 
@@ -134,15 +167,22 @@ namespace Assembler
                 }
                 else if (opcode == "ENDM")
                 {
-                    state.CurrentMacro.AddLine(line);
-
-                    // If macro has no name apply it immediately (inline)
-                    if (String.IsNullOrWhiteSpace(state.CurrentMacro.Name))
+                    if (state.CurrentMacro != null)
                     {
-                        await ExpandMacro(state.CurrentMacro, operands, state, outputCollector);
-                    }
+                        state.CurrentMacro.AddLine(line);
 
-                    state.EndMacro();
+                        // If macro has no name apply it immediately (inline)
+                        if (String.IsNullOrWhiteSpace(state.CurrentMacro.Name))
+                        {
+                            await ExpandMacro(state.CurrentMacro, operands, state, outputCollector);
+                        }
+
+                        state.EndMacro();
+                    }
+                    else
+                    {
+                        state.EndMacroExpansion();
+                    }
                     return;
                 }
 
@@ -159,9 +199,10 @@ namespace Assembler
                 if (macro != null)
                 {
                     await ExpandMacro(macro, operands, state, outputCollector);
+                    return;
                 }
 
-                if (label != String.Empty && label.EndsWith(':'))
+                if (label.EndsWith(':') && opcode != "EQU")
                 {
                     state.SetLabel(ComposeLabel(label, state), state.SymbolType);
                 }
@@ -176,6 +217,15 @@ namespace Assembler
                     switch (opcode)
                     {
                         case ".TITLE":
+                        case "EXITM":
+                        case ".LALL":
+                        case ".SALL":
+                        case ".XALL":
+                        case ".CREF":
+                        case ".XCREF":
+                        case ".SFCOND":
+                        case ".LFCOND":
+                        case ".TFCOND":
                             // TODO
                             break;
 
@@ -213,7 +263,7 @@ namespace Assembler
                             break;
 
                         case "EQU":
-                            state.SetSymbol(label, ParseInt(state, operands), true);
+                            state.SetSymbol(label.TrimEnd(':'), ParseInt(state, operands), true);
                             break;
 
                         case "DS":
@@ -246,7 +296,10 @@ namespace Assembler
                     }
                 }
 
-                await outputCollector.Emit(label, state.Address, bytes, opcode, operands, comment);
+                if (state.Pass == 1)
+                {
+                    await outputCollector.Emit(state.LineNr, label, state.Address, bytes, opcode, operands, comment);
+                }
                 state.Address += bytes?.Length ?? 0;
             }
             catch (Exception e)
@@ -261,7 +314,7 @@ namespace Assembler
             if (par == null || par.Length < 1 || par.Length > 2)
                 throw new InvalidOperationException($"{opcode} expects 1 or 2 integer parameters");
             int count = (int)par[0];
-            int value = par.Length == 2 ? (int)par[1] : 0;
+            int value = par.Length == 2 ? Compiler.ExpectNumber(par[1]) : 0;
             if (count < 0 || count > 65535)
                 throw new InvalidOperationException($"Invalid count for {opcode}");
             if (value < -127 || value > 255)
@@ -273,22 +326,20 @@ namespace Assembler
 
         private static byte[] HandleDb(State state, string opcode, string operands)
         {
-            // TODO: Handle strings of 1 or 2 chars (translate to lo/hi bytes
-            // TODO: Handle longer strings
-
             var par = Compiler.Get(operands, state);
             if (par == null || par.Length < 1)
                 throw new InvalidOperationException($"{opcode} expects 1 or more integer parameters");
             if (par.Length == 1 && par[0] is object[] parr)
                 par = parr;
-            var bytes = par.Select(it =>
+            return par.SelectMany(it =>
             {
-                int value = it == null ? 0 : (int)it;
+                if (it is string s)
+                    return s.Select(c => (byte)c);
+                int value = Compiler.ExpectNumber(it);
                 if (value < -127 || value > 255)
                     throw new InvalidOperationException($"Value out of range for {opcode}");
-                return (byte)value;
+                return new[] { (byte)value };
             }).ToArray();
-            return bytes;
         }
 
         private static byte[] HandleDw(State state, string opcode, string operands)
@@ -300,7 +351,7 @@ namespace Assembler
                 par = parr;
             var bytes = par.SelectMany(it =>
             {
-                int value = it == null ? 0 : (int)it;
+                int value = Compiler.ExpectNumber(it, state.Pass == 0);
                 if (value < -32768 || value > 65535)
                     throw new InvalidOperationException($"Value out of range for {opcode}");
 

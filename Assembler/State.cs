@@ -205,13 +205,15 @@ namespace Assembler
                 }
                 else
                 {
-                    if (sm.Readonly && sm.Value != null)
+                    if (sm.Readonly && sm.Value != null && !sm.HasEqualValue(symbol))
                         throw new InvalidOperationException($"Symbol {symbol.Name} is already set");
                     sm.Value = symbol.Value;
                     return sm;
                 }
             }
         }
+
+        public IEnumerable<Symbol> Symbols => symbols.Values.OrderBy(it => it.Name);
 
         public Symbol SetSymbol(string name, object value, bool @readonly = false)
         {
@@ -272,6 +274,22 @@ namespace Assembler
                 CurrentMacro = null;
         }
 
+        public void ClearExeptSymbols()
+        {
+            blockCommentCollector.Clear();
+            macros.Clear();
+            macroStates.Clear();
+            ifStates.Clear();
+            dummyCounter = 0;
+            LineNr = 0;
+            Address = 0;
+            Radix = 10;
+            SymbolType = SymbolType.CodeRelative;
+            Mode = Mode.Default;
+            CurrentMacro = null;
+            MacroDepth = 0;
+        }
+
         public MacroState BeginMacroExpansion(Macro macro)
         {
             var expansion = new MacroState(macro);
@@ -310,6 +328,6 @@ namespace Assembler
         }
 
         public bool HasCondition =>
-            ifStates.Count == 0 ? true : ifStates.All(it => it);
+            ifStates.Count == 0 || ifStates.All(it => it);
     }
 }

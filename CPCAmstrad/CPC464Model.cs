@@ -45,10 +45,10 @@ namespace CPCAmstrad
             memorySwitch = new bool[] { true, true, true };     // All enabled
             memoryModel.SwitchMemory(memorySwitch);
 
-            memoryModel.Write(LoadRom("LOWER.ROM"), 0x0000, new[] { true, false, false });
-            memoryModel.Write(LoadRom("UPPER.ROM"), 0xC000, new[] { false, true, false });
+            memoryModel.Write(LoadRom("LOWER.ROM"), 0x0000, true, false, false);
+            memoryModel.Write(LoadRom("UPPER.ROM"), 0xC000, false, true, false);
 
-            screenRam = memoryModel.Read(0xC000, 0x4000, new[] { false, false, true });
+            screenRam = memoryModel.Read(0xC000, 0x4000, false, false, true);
 
             // Create Z80 emulator
             var emulator = new Z80Emulator

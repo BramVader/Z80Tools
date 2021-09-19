@@ -7,10 +7,11 @@ namespace Disassembler
 {
     public enum SymbolType
     {
+        Comment,
         Constant,
         Label
     }
-    
+
     public class Symbol
     {
         public class Comparer : IComparer<Symbol>
@@ -20,7 +21,7 @@ namespace Disassembler
                 return x.Value.CompareTo(y.Value);
             }
         }
-        
+
         public SymbolType Type { get; set; }
         public bool[] MemoryMask { get; set; }
         public int Value { get; set; }

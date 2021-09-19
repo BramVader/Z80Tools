@@ -73,7 +73,7 @@ namespace Z80TestConsole
         {
             switch (m.Msg)
             {
-                case 0x100: // WM_KEYDOWN  
+                case 0x100: // WM_KEYDOWN
                     switch ((VirtualKeys)m.WParam)
                     {
                         case VirtualKeys.VK_PRIOR:

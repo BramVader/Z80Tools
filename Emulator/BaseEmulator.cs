@@ -53,14 +53,19 @@ namespace Emulator
             get { return statesTaken; }
         }
 
-        public void UpdateBreakpoints(IEnumerable<Breakpoint> breakpoints)
+        public void AddBreakpoint(Breakpoint breakpoint)
         {
-            for (int n = 0; n < 0x10000; n++)
-                this.breakpoints[n] = null;
-            foreach (var breakpoint in breakpoints)
-            {
-                this.breakpoints[breakpoint.Address & 0xFFFF] = breakpoint;
-            }
+            breakpoints[breakpoint.Address & 0xFFFF] = breakpoint;
+        }
+
+        public void RemoveBreakpoint(int address)
+        {
+            breakpoints[address] = null;
+        }
+
+        public void RemoveAllBreakpoints()
+        {
+            Array.Clear(breakpoints, 0, 0x10000);
         }
 
         public double TimeTaken
@@ -112,7 +117,8 @@ namespace Emulator
                                         if (breakpoints[registers.PC] != null)
                                         {
                                             breakpoint = breakpoints[registers.PC];
-                                            break;
+                                            if (breakpoint.Handle(this))
+                                                break;
                                         }
                                     }
                                     stopWatch.Stop();

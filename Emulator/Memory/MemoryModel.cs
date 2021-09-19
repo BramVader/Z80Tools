@@ -124,7 +124,7 @@ namespace Emulator
             };
         }
 
-        public void SwitchMemory(bool[] enabled)
+        public void SwitchMemory(params bool[] enabled)
         {
             foreach (MemoryChunk chunk in memoryChunks)
             {
@@ -146,7 +146,7 @@ namespace Emulator
             }
         }
 
-        public byte Read(int address, bool[] enabled)
+        public byte Read(int address, params bool[] enabled)
         {
             var chunk = memoryChunks[address >> chunkShift];
             for (int i = 0; i < chunk.indices.Length; i++)
@@ -159,7 +159,7 @@ namespace Emulator
             return 0;
         }
 
-        public byte[] Read(int address, int length, bool[] enabled)
+        public byte[] Read(int address, int length, params bool[] enabled)
         {
             if (length == chunkSize && address % chunkSize == 0)
             {
@@ -190,7 +190,7 @@ namespace Emulator
             return result;
         }
 
-        public void Write(int address, byte value, bool[] enabled)
+        public void Write(int address, byte value, params bool[] enabled)
         {
             var chunk = memoryChunks[address >> chunkShift];
             for (int i = 0; i < chunk.indices.Length; i++)
@@ -202,7 +202,7 @@ namespace Emulator
             }
         }
 
-        public void Write(byte[] data, int address, bool[] enabled)
+        public void Write(byte[] data, int address, params bool[] enabled)
         {
             int offset1 = 0;
             int length = data.Length;
@@ -225,7 +225,7 @@ namespace Emulator
             while (offset1 < length);
         }
 
-        public MemoryDescriptor GetMemoryDescriptor(int address, bool[] enabled)
+        public MemoryDescriptor GetMemoryDescriptor(int address, params bool[] enabled)
         {
             var chunk = memoryChunks[address >> chunkShift];
             for (int i = 0; i < chunk.indices.Length; i++)

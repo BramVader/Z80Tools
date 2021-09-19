@@ -1,8 +1,6 @@
-﻿using System;
+﻿using Emulator;
+using System;
 using System.Linq.Expressions;
-using System.Threading;
-using Emulator;
-using Assembler;
 
 namespace Z80Core
 {
@@ -17,7 +15,7 @@ namespace Z80Core
         private bool nonMaskableInterrupt = false;
         private byte interruptDataBus = 0xFF;
 
-        private Z80Registers z80Registers;
+        private readonly Z80Registers z80Registers;
 
         public Z80Emulator()
         {
@@ -37,7 +35,7 @@ namespace Z80Core
         /// <summary>
         /// Simulates low state of INT-input (not edge-triggered!)
         /// </summary>
-        public bool Interrupt 
+        public bool Interrupt
         {
             get { return interrupt; }
             set { interrupt = value; }
@@ -77,8 +75,7 @@ namespace Z80Core
             }
             if (interrupt && z80Registers.Iff1 && !z80Registers.MaskInterruptsNext)
             {
-                if (OnInterruptAcknowledged != null)
-                    OnInterruptAcknowledged(this, new EventArgs());
+                OnInterruptAcknowledged?.Invoke(this, new EventArgs());
                 handleInt(this, interruptDataBus);
             }
             z80Registers.MaskInterruptsNext = false;
@@ -102,7 +99,7 @@ namespace Z80Core
                     if (opcodes[1] == 0xCB)
                         return builder.MicroExprFDCB[opcodes[3]];
                     else
-                        return builder.MicroExprFD[opcodes[1]];        
+                        return builder.MicroExprFD[opcodes[1]];
                 default:
                     return builder.MicroExpr[opcodes[0]];
             }

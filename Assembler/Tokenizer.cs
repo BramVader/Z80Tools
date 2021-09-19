@@ -60,10 +60,18 @@ namespace Assembler
                         switch (ch)
                         {
                             case char n when (n >= '0' && n <= '9') || (n == '-'):
-                                mode = Mode.Number;
-                                radix = defaultRadix;
-                                bufferIndex = 0;
-                                buffer[bufferIndex++] = ch;
+                                if (n == '-' && !expectingOperand)
+                                {
+                                    tokens.Add(new Token { Type = TokenType.Subtract });
+                                    expectingOperand = true;
+                                }
+                                else
+                                {
+                                    mode = Mode.Number;
+                                    radix = defaultRadix;
+                                    bufferIndex = 0;
+                                    buffer[bufferIndex++] = ch;
+                                }
                                 break;
                             case '\'':
                             case '"':
@@ -183,7 +191,6 @@ namespace Assembler
                             {
                                 tokens.Add(new Token { Type = TokenType.String, Value = new String(buffer, 0, bufferIndex) });
                                 mode = Mode.None;
-                                i--;
                                 expectingOperand = false;
                             }
                         }
