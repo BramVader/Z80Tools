@@ -1078,10 +1078,32 @@ namespace Z80TestConsole
             }
         }
 
+        private TextBox focusedTextbox = null;
+
         private void RegisterLeave(object sender, EventArgs e)
         {
+            focusedTextbox = null;
             UpdateRegisters();
             Registers.CloneTo(lastRegisters);
+        }
+
+        private void RegisterEnter(object sender, EventArgs e)
+        {
+            if (MouseButtons == MouseButtons.None)
+            {
+                focusedTextbox = sender as TextBox;
+                focusedTextbox.SelectAll();
+            }
+        }
+
+        private void RegisterMouseUp(object sender, MouseEventArgs e)
+        {
+            var thisTextBox = sender as TextBox;
+            if (thisTextBox.SelectionLength == 0)
+            {
+                focusedTextbox = thisTextBox;
+                thisTextBox.SelectAll();
+            }
         }
     }
 }

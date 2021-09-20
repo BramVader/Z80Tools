@@ -428,6 +428,12 @@ namespace Z80Core
                 z80regs.de = de;
                 z80regs.hl = hl;
                 z80regs.AF = AF;
+
+                z80regs.af_ = af_;
+                z80regs.bc_ = bc_;
+                z80regs.de_ = de_;
+                z80regs.hl_ = hl_;
+
             }
         }
     }

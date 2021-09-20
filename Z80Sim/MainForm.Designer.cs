@@ -310,8 +310,10 @@
             this.textBoxRegPC.Name = "textBoxRegPC";
             this.textBoxRegPC.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegPC.TabIndex = 21;
+            this.textBoxRegPC.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegPC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegPC.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegPC.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegSP
             // 
@@ -320,8 +322,10 @@
             this.textBoxRegSP.Name = "textBoxRegSP";
             this.textBoxRegSP.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegSP.TabIndex = 19;
+            this.textBoxRegSP.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegSP.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegSP.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegSP.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegIY
             // 
@@ -330,8 +334,10 @@
             this.textBoxRegIY.Name = "textBoxRegIY";
             this.textBoxRegIY.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegIY.TabIndex = 17;
+            this.textBoxRegIY.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegIY.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegIY.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegIY.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegIX
             // 
@@ -340,8 +346,10 @@
             this.textBoxRegIX.Name = "textBoxRegIX";
             this.textBoxRegIX.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegIX.TabIndex = 14;
+            this.textBoxRegIX.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegIX.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegIX.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegIX.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegIYL
             // 
@@ -350,8 +358,10 @@
             this.textBoxRegIYL.Name = "textBoxRegIYL";
             this.textBoxRegIYL.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIYL.TabIndex = 16;
+            this.textBoxRegIYL.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegIYL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegIYL.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegIYL.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegIXL
             // 
@@ -360,8 +370,10 @@
             this.textBoxRegIXL.Name = "textBoxRegIXL";
             this.textBoxRegIXL.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIXL.TabIndex = 13;
+            this.textBoxRegIXL.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegIXL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegIXL.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegIXL.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxStates
             // 
@@ -378,8 +390,10 @@
             this.textBoxRegR.Name = "textBoxRegR";
             this.textBoxRegR.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegR.TabIndex = 20;
+            this.textBoxRegR.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegR.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegR.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegR.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegI
             // 
@@ -388,8 +402,10 @@
             this.textBoxRegI.Name = "textBoxRegI";
             this.textBoxRegI.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegI.TabIndex = 18;
+            this.textBoxRegI.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegI.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegI.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegI.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegIXH
             // 
@@ -398,8 +414,10 @@
             this.textBoxRegIXH.Name = "textBoxRegIXH";
             this.textBoxRegIXH.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIXH.TabIndex = 12;
+            this.textBoxRegIXH.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegIXH.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegIXH.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegIXH.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxRegIYH
             // 
@@ -408,8 +426,10 @@
             this.textBoxRegIYH.Name = "textBoxRegIYH";
             this.textBoxRegIYH.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIYH.TabIndex = 15;
+            this.textBoxRegIYH.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxRegIYH.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxRegIYH.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxRegIYH.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // label12
             // 
@@ -759,8 +779,10 @@
             this.textBoxSet0RegA.Name = "textBoxSet0RegA";
             this.textBoxSet0RegA.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegA.TabIndex = 11;
+            this.textBoxSet0RegA.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegA.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegA.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegA.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegB
             // 
@@ -769,8 +791,10 @@
             this.textBoxSet0RegB.Name = "textBoxSet0RegB";
             this.textBoxSet0RegB.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegB.TabIndex = 2;
+            this.textBoxSet0RegB.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegB.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegB.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegB.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegC
             // 
@@ -779,8 +803,10 @@
             this.textBoxSet0RegC.Name = "textBoxSet0RegC";
             this.textBoxSet0RegC.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegC.TabIndex = 3;
+            this.textBoxSet0RegC.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegC.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegC.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegD
             // 
@@ -789,8 +815,10 @@
             this.textBoxSet0RegD.Name = "textBoxSet0RegD";
             this.textBoxSet0RegD.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegD.TabIndex = 5;
+            this.textBoxSet0RegD.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegD.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegD.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegD.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegE
             // 
@@ -799,8 +827,10 @@
             this.textBoxSet0RegE.Name = "textBoxSet0RegE";
             this.textBoxSet0RegE.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegE.TabIndex = 6;
+            this.textBoxSet0RegE.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegE.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegE.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegE.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegH
             // 
@@ -809,8 +839,10 @@
             this.textBoxSet0RegH.Name = "textBoxSet0RegH";
             this.textBoxSet0RegH.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegH.TabIndex = 8;
+            this.textBoxSet0RegH.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegH.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegH.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegH.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegL
             // 
@@ -819,8 +851,10 @@
             this.textBoxSet0RegL.Name = "textBoxSet0RegL";
             this.textBoxSet0RegL.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegL.TabIndex = 9;
+            this.textBoxSet0RegL.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegL.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegL.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegBC
             // 
@@ -829,8 +863,10 @@
             this.textBoxSet0RegBC.Name = "textBoxSet0RegBC";
             this.textBoxSet0RegBC.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet0RegBC.TabIndex = 4;
+            this.textBoxSet0RegBC.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegBC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegBC.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegBC.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegDE
             // 
@@ -839,8 +875,10 @@
             this.textBoxSet0RegDE.Name = "textBoxSet0RegDE";
             this.textBoxSet0RegDE.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet0RegDE.TabIndex = 7;
+            this.textBoxSet0RegDE.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegDE.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegDE.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegDE.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet0RegHL
             // 
@@ -849,8 +887,10 @@
             this.textBoxSet0RegHL.Name = "textBoxSet0RegHL";
             this.textBoxSet0RegHL.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet0RegHL.TabIndex = 10;
+            this.textBoxSet0RegHL.Enter += new System.EventHandler(this.RegisterEnter);
             this.textBoxSet0RegHL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
             this.textBoxSet0RegHL.Leave += new System.EventHandler(this.RegisterLeave);
+            this.textBoxSet0RegHL.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // tabRegisterSet2
             // 
@@ -962,6 +1002,10 @@
             this.textBoxSet1RegA.Name = "textBoxSet1RegA";
             this.textBoxSet1RegA.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet1RegA.TabIndex = 11;
+            this.textBoxSet1RegA.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegA.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegA.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegA.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegB
             // 
@@ -970,6 +1014,10 @@
             this.textBoxSet1RegB.Name = "textBoxSet1RegB";
             this.textBoxSet1RegB.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet1RegB.TabIndex = 2;
+            this.textBoxSet1RegB.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegB.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegB.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegB.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegC
             // 
@@ -978,6 +1026,10 @@
             this.textBoxSet1RegC.Name = "textBoxSet1RegC";
             this.textBoxSet1RegC.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet1RegC.TabIndex = 3;
+            this.textBoxSet1RegC.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegC.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegC.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegD
             // 
@@ -986,6 +1038,10 @@
             this.textBoxSet1RegD.Name = "textBoxSet1RegD";
             this.textBoxSet1RegD.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet1RegD.TabIndex = 5;
+            this.textBoxSet1RegD.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegD.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegD.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegD.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegE
             // 
@@ -994,6 +1050,10 @@
             this.textBoxSet1RegE.Name = "textBoxSet1RegE";
             this.textBoxSet1RegE.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet1RegE.TabIndex = 6;
+            this.textBoxSet1RegE.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegE.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegE.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegE.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegH
             // 
@@ -1002,6 +1062,10 @@
             this.textBoxSet1RegH.Name = "textBoxSet1RegH";
             this.textBoxSet1RegH.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet1RegH.TabIndex = 8;
+            this.textBoxSet1RegH.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegH.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegH.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegH.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegL
             // 
@@ -1010,6 +1074,10 @@
             this.textBoxSet1RegL.Name = "textBoxSet1RegL";
             this.textBoxSet1RegL.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet1RegL.TabIndex = 9;
+            this.textBoxSet1RegL.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegL.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegL.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegBC
             // 
@@ -1018,6 +1086,10 @@
             this.textBoxSet1RegBC.Name = "textBoxSet1RegBC";
             this.textBoxSet1RegBC.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet1RegBC.TabIndex = 4;
+            this.textBoxSet1RegBC.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegBC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegBC.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegBC.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegDE
             // 
@@ -1026,6 +1098,10 @@
             this.textBoxSet1RegDE.Name = "textBoxSet1RegDE";
             this.textBoxSet1RegDE.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet1RegDE.TabIndex = 7;
+            this.textBoxSet1RegDE.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegDE.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegDE.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegDE.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // textBoxSet1RegHL
             // 
@@ -1034,6 +1110,10 @@
             this.textBoxSet1RegHL.Name = "textBoxSet1RegHL";
             this.textBoxSet1RegHL.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet1RegHL.TabIndex = 10;
+            this.textBoxSet1RegHL.Enter += new System.EventHandler(this.RegisterEnter);
+            this.textBoxSet1RegHL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet1RegHL.Leave += new System.EventHandler(this.HexadecimalCheckBox_CheckedChanged);
+            this.textBoxSet1RegHL.MouseUp += new System.Windows.Forms.MouseEventHandler(this.RegisterMouseUp);
             // 
             // label1
             // 
