@@ -31,7 +31,10 @@
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             this.groupBoxStack = new System.Windows.Forms.GroupBox();
-            this.listBoxStack = new System.Windows.Forms.ListBox();
+            this.stackListBox = new Z80TestConsole.VirtualListbox();
+            this.contextMenuAssembly = new System.Windows.Forms.ContextMenuStrip(this.components);
+            this.gotoAssemblyAddressItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.stackAddressScroller = new System.Windows.Forms.VScrollBar();
             this.groupBoxRegisters = new System.Windows.Forms.GroupBox();
             this.checkBoxIFF2 = new System.Windows.Forms.CheckBox();
             this.checkBoxIFF1 = new System.Windows.Forms.CheckBox();
@@ -117,15 +120,13 @@
             this.signedCheckBox = new System.Windows.Forms.CheckBox();
             this.hexadecimalCheckBox = new System.Windows.Forms.CheckBox();
             this.groupBoxDisassembly = new System.Windows.Forms.GroupBox();
-            this.disassemblyAddressScroller = new System.Windows.Forms.VScrollBar();
             this.disassemblyListBox = new Z80TestConsole.VirtualListbox();
-            this.contextMenuAssembly = new System.Windows.Forms.ContextMenuStrip(this.components);
-            this.gotoAssemblyAddressItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.disassemblyAddressScroller = new System.Windows.Forms.VScrollBar();
             this.groupBoxMemory = new System.Windows.Forms.GroupBox();
-            this.memoryAddressScroller = new System.Windows.Forms.VScrollBar();
             this.memoryListBox = new Z80TestConsole.VirtualListbox();
             this.contextMenuMemory = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.gotoMemoryAddressItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.memoryAddressScroller = new System.Windows.Forms.VScrollBar();
             this.menuStrip1 = new System.Windows.Forms.MenuStrip();
             this.fileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openRomToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -156,12 +157,12 @@
             this.checkBoxUpdateScreen = new System.Windows.Forms.CheckBox();
             this.timer1 = new System.Windows.Forms.Timer(this.components);
             this.groupBoxStack.SuspendLayout();
+            this.contextMenuAssembly.SuspendLayout();
             this.groupBoxRegisters.SuspendLayout();
             this.tabRegisters.SuspendLayout();
             this.tabRegisterSet1.SuspendLayout();
             this.tabRegisterSet2.SuspendLayout();
             this.groupBoxDisassembly.SuspendLayout();
-            this.contextMenuAssembly.SuspendLayout();
             this.groupBoxMemory.SuspendLayout();
             this.contextMenuMemory.SuspendLayout();
             this.menuStrip1.SuspendLayout();
@@ -173,7 +174,8 @@
             // 
             this.groupBoxStack.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.groupBoxStack.Controls.Add(this.listBoxStack);
+            this.groupBoxStack.Controls.Add(this.stackListBox);
+            this.groupBoxStack.Controls.Add(this.stackAddressScroller);
             this.groupBoxStack.Location = new System.Drawing.Point(647, 229);
             this.groupBoxStack.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.groupBoxStack.Name = "groupBoxStack";
@@ -183,19 +185,49 @@
             this.groupBoxStack.TabStop = false;
             this.groupBoxStack.Text = "Stack";
             // 
-            // listBoxStack
+            // stackListBox
             // 
-            this.listBoxStack.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.listBoxStack.Font = new System.Drawing.Font("Consolas", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.listBoxStack.FormattingEnabled = true;
-            this.listBoxStack.ItemHeight = 18;
-            this.listBoxStack.Location = new System.Drawing.Point(8, 28);
-            this.listBoxStack.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
-            this.listBoxStack.Name = "listBoxStack";
-            this.listBoxStack.Size = new System.Drawing.Size(124, 364);
-            this.listBoxStack.TabIndex = 0;
+            this.stackListBox.ContextMenuStrip = this.contextMenuAssembly;
+            this.stackListBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.stackListBox.DrawMode = System.Windows.Forms.DrawMode.OwnerDrawVariable;
+            this.stackListBox.Font = new System.Drawing.Font("Consolas", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.stackListBox.FormattingEnabled = true;
+            this.stackListBox.ItemHeight = 14;
+            this.stackListBox.Location = new System.Drawing.Point(5, 24);
+            this.stackListBox.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
+            this.stackListBox.Name = "stackListBox";
+            this.stackListBox.SelectedAddress = null;
+            this.stackListBox.Size = new System.Drawing.Size(111, 429);
+            this.stackListBox.TabIndex = 6;
+            this.stackListBox.DrawItem += new System.Windows.Forms.DrawItemEventHandler(this.StackListBox_DrawItem);
+            // 
+            // contextMenuAssembly
+            // 
+            this.contextMenuAssembly.ImageScalingSize = new System.Drawing.Size(20, 20);
+            this.contextMenuAssembly.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.gotoAssemblyAddressItem});
+            this.contextMenuAssembly.Name = "contextMenuAssembly";
+            this.contextMenuAssembly.Size = new System.Drawing.Size(230, 28);
+            // 
+            // gotoAssemblyAddressItem
+            // 
+            this.gotoAssemblyAddressItem.Name = "gotoAssemblyAddressItem";
+            this.gotoAssemblyAddressItem.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.G)));
+            this.gotoAssemblyAddressItem.Size = new System.Drawing.Size(229, 24);
+            this.gotoAssemblyAddressItem.Text = "Goto Address...";
+            this.gotoAssemblyAddressItem.Click += new System.EventHandler(this.GotoAddressItem_Click);
+            // 
+            // stackAddressScroller
+            // 
+            this.stackAddressScroller.AccessibleDescription = "";
+            this.stackAddressScroller.Dock = System.Windows.Forms.DockStyle.Right;
+            this.stackAddressScroller.LargeChange = 32;
+            this.stackAddressScroller.Location = new System.Drawing.Point(116, 24);
+            this.stackAddressScroller.Maximum = 65535;
+            this.stackAddressScroller.Name = "stackAddressScroller";
+            this.stackAddressScroller.Size = new System.Drawing.Size(21, 429);
+            this.stackAddressScroller.TabIndex = 5;
+            this.stackAddressScroller.Scroll += new System.Windows.Forms.ScrollEventHandler(this.StackAddressScroller_Scroll);
             // 
             // groupBoxRegisters
             // 
@@ -278,6 +310,8 @@
             this.textBoxRegPC.Name = "textBoxRegPC";
             this.textBoxRegPC.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegPC.TabIndex = 21;
+            this.textBoxRegPC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegPC.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegSP
             // 
@@ -286,6 +320,8 @@
             this.textBoxRegSP.Name = "textBoxRegSP";
             this.textBoxRegSP.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegSP.TabIndex = 19;
+            this.textBoxRegSP.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegSP.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegIY
             // 
@@ -294,6 +330,8 @@
             this.textBoxRegIY.Name = "textBoxRegIY";
             this.textBoxRegIY.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegIY.TabIndex = 17;
+            this.textBoxRegIY.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegIY.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegIX
             // 
@@ -302,6 +340,8 @@
             this.textBoxRegIX.Name = "textBoxRegIX";
             this.textBoxRegIX.Size = new System.Drawing.Size(68, 27);
             this.textBoxRegIX.TabIndex = 14;
+            this.textBoxRegIX.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegIX.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegIYL
             // 
@@ -310,6 +350,8 @@
             this.textBoxRegIYL.Name = "textBoxRegIYL";
             this.textBoxRegIYL.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIYL.TabIndex = 16;
+            this.textBoxRegIYL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegIYL.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegIXL
             // 
@@ -318,6 +360,8 @@
             this.textBoxRegIXL.Name = "textBoxRegIXL";
             this.textBoxRegIXL.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIXL.TabIndex = 13;
+            this.textBoxRegIXL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegIXL.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxStates
             // 
@@ -334,6 +378,8 @@
             this.textBoxRegR.Name = "textBoxRegR";
             this.textBoxRegR.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegR.TabIndex = 20;
+            this.textBoxRegR.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegR.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegI
             // 
@@ -342,6 +388,8 @@
             this.textBoxRegI.Name = "textBoxRegI";
             this.textBoxRegI.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegI.TabIndex = 18;
+            this.textBoxRegI.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegI.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegIXH
             // 
@@ -350,6 +398,8 @@
             this.textBoxRegIXH.Name = "textBoxRegIXH";
             this.textBoxRegIXH.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIXH.TabIndex = 12;
+            this.textBoxRegIXH.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegIXH.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxRegIYH
             // 
@@ -358,6 +408,8 @@
             this.textBoxRegIYH.Name = "textBoxRegIYH";
             this.textBoxRegIYH.Size = new System.Drawing.Size(52, 27);
             this.textBoxRegIYH.TabIndex = 15;
+            this.textBoxRegIYH.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxRegIYH.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // label12
             // 
@@ -707,6 +759,8 @@
             this.textBoxSet0RegA.Name = "textBoxSet0RegA";
             this.textBoxSet0RegA.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegA.TabIndex = 11;
+            this.textBoxSet0RegA.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegA.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegB
             // 
@@ -715,6 +769,8 @@
             this.textBoxSet0RegB.Name = "textBoxSet0RegB";
             this.textBoxSet0RegB.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegB.TabIndex = 2;
+            this.textBoxSet0RegB.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegB.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegC
             // 
@@ -723,6 +779,8 @@
             this.textBoxSet0RegC.Name = "textBoxSet0RegC";
             this.textBoxSet0RegC.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegC.TabIndex = 3;
+            this.textBoxSet0RegC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegC.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegD
             // 
@@ -731,6 +789,8 @@
             this.textBoxSet0RegD.Name = "textBoxSet0RegD";
             this.textBoxSet0RegD.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegD.TabIndex = 5;
+            this.textBoxSet0RegD.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegD.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegE
             // 
@@ -739,6 +799,8 @@
             this.textBoxSet0RegE.Name = "textBoxSet0RegE";
             this.textBoxSet0RegE.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegE.TabIndex = 6;
+            this.textBoxSet0RegE.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegE.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegH
             // 
@@ -747,6 +809,8 @@
             this.textBoxSet0RegH.Name = "textBoxSet0RegH";
             this.textBoxSet0RegH.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegH.TabIndex = 8;
+            this.textBoxSet0RegH.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegH.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegL
             // 
@@ -755,6 +819,8 @@
             this.textBoxSet0RegL.Name = "textBoxSet0RegL";
             this.textBoxSet0RegL.Size = new System.Drawing.Size(52, 27);
             this.textBoxSet0RegL.TabIndex = 9;
+            this.textBoxSet0RegL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegL.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegBC
             // 
@@ -763,6 +829,8 @@
             this.textBoxSet0RegBC.Name = "textBoxSet0RegBC";
             this.textBoxSet0RegBC.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet0RegBC.TabIndex = 4;
+            this.textBoxSet0RegBC.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegBC.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegDE
             // 
@@ -771,6 +839,8 @@
             this.textBoxSet0RegDE.Name = "textBoxSet0RegDE";
             this.textBoxSet0RegDE.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet0RegDE.TabIndex = 7;
+            this.textBoxSet0RegDE.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegDE.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // textBoxSet0RegHL
             // 
@@ -779,6 +849,8 @@
             this.textBoxSet0RegHL.Name = "textBoxSet0RegHL";
             this.textBoxSet0RegHL.Size = new System.Drawing.Size(68, 27);
             this.textBoxSet0RegHL.TabIndex = 10;
+            this.textBoxSet0RegHL.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.RegisterKeyPress);
+            this.textBoxSet0RegHL.Leave += new System.EventHandler(this.RegisterLeave);
             // 
             // tabRegisterSet2
             // 
@@ -1112,18 +1184,6 @@
             this.groupBoxDisassembly.TabStop = false;
             this.groupBoxDisassembly.Text = "Disassembly";
             // 
-            // disassemblyAddressScroller
-            // 
-            this.disassemblyAddressScroller.AccessibleDescription = "";
-            this.disassemblyAddressScroller.Dock = System.Windows.Forms.DockStyle.Right;
-            this.disassemblyAddressScroller.LargeChange = 32;
-            this.disassemblyAddressScroller.Location = new System.Drawing.Point(591, 24);
-            this.disassemblyAddressScroller.Maximum = 65535;
-            this.disassemblyAddressScroller.Name = "disassemblyAddressScroller";
-            this.disassemblyAddressScroller.Size = new System.Drawing.Size(21, 429);
-            this.disassemblyAddressScroller.TabIndex = 4;
-            this.disassemblyAddressScroller.Scroll += new System.Windows.Forms.ScrollEventHandler(this.DisassemblyAddressScroller_Scroll);
-            // 
             // disassemblyListBox
             // 
             this.disassemblyListBox.ContextMenuStrip = this.contextMenuAssembly;
@@ -1144,28 +1204,24 @@
             this.disassemblyListBox.MouseMove += new System.Windows.Forms.MouseEventHandler(this.DisassemblyListBox_MouseMove);
             this.disassemblyListBox.MouseUp += new System.Windows.Forms.MouseEventHandler(this.DisassemblyListBox_MouseUp);
             // 
-            // contextMenuAssembly
+            // disassemblyAddressScroller
             // 
-            this.contextMenuAssembly.ImageScalingSize = new System.Drawing.Size(20, 20);
-            this.contextMenuAssembly.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.gotoAssemblyAddressItem});
-            this.contextMenuAssembly.Name = "contextMenuAssembly";
-            this.contextMenuAssembly.Size = new System.Drawing.Size(230, 28);
-            // 
-            // gotoAssemblyAddressItem
-            // 
-            this.gotoAssemblyAddressItem.Name = "gotoAssemblyAddressItem";
-            this.gotoAssemblyAddressItem.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.G)));
-            this.gotoAssemblyAddressItem.Size = new System.Drawing.Size(229, 24);
-            this.gotoAssemblyAddressItem.Text = "Goto Address...";
-            this.gotoAssemblyAddressItem.Click += new System.EventHandler(this.GotoAddressItem_Click);
+            this.disassemblyAddressScroller.AccessibleDescription = "";
+            this.disassemblyAddressScroller.Dock = System.Windows.Forms.DockStyle.Right;
+            this.disassemblyAddressScroller.LargeChange = 32;
+            this.disassemblyAddressScroller.Location = new System.Drawing.Point(591, 24);
+            this.disassemblyAddressScroller.Maximum = 65535;
+            this.disassemblyAddressScroller.Name = "disassemblyAddressScroller";
+            this.disassemblyAddressScroller.Size = new System.Drawing.Size(21, 429);
+            this.disassemblyAddressScroller.TabIndex = 4;
+            this.disassemblyAddressScroller.Scroll += new System.Windows.Forms.ScrollEventHandler(this.DisassemblyAddressScroller_Scroll);
             // 
             // groupBoxMemory
             // 
             this.groupBoxMemory.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.groupBoxMemory.Controls.Add(this.memoryAddressScroller);
             this.groupBoxMemory.Controls.Add(this.memoryListBox);
+            this.groupBoxMemory.Controls.Add(this.memoryAddressScroller);
             this.groupBoxMemory.Location = new System.Drawing.Point(16, 696);
             this.groupBoxMemory.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.groupBoxMemory.Name = "groupBoxMemory";
@@ -1175,31 +1231,18 @@
             this.groupBoxMemory.TabStop = false;
             this.groupBoxMemory.Text = "Memory";
             // 
-            // memoryAddressScroller
-            // 
-            this.memoryAddressScroller.AccessibleDescription = "";
-            this.memoryAddressScroller.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.memoryAddressScroller.LargeChange = 64;
-            this.memoryAddressScroller.Location = new System.Drawing.Point(1075, 29);
-            this.memoryAddressScroller.Maximum = 65535;
-            this.memoryAddressScroller.Name = "memoryAddressScroller";
-            this.memoryAddressScroller.Size = new System.Drawing.Size(21, 199);
-            this.memoryAddressScroller.SmallChange = 16;
-            this.memoryAddressScroller.TabIndex = 6;
-            this.memoryAddressScroller.Scroll += new System.Windows.Forms.ScrollEventHandler(this.MemoryAddressScroller_Scroll);
-            // 
             // memoryListBox
             // 
             this.memoryListBox.ContextMenuStrip = this.contextMenuMemory;
+            this.memoryListBox.Dock = System.Windows.Forms.DockStyle.Fill;
             this.memoryListBox.DrawMode = System.Windows.Forms.DrawMode.OwnerDrawFixed;
             this.memoryListBox.Font = new System.Drawing.Font("Consolas", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             this.memoryListBox.FormattingEnabled = true;
-            this.memoryListBox.Location = new System.Drawing.Point(8, 29);
+            this.memoryListBox.Location = new System.Drawing.Point(5, 24);
             this.memoryListBox.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.memoryListBox.Name = "memoryListBox";
             this.memoryListBox.SelectedAddress = null;
-            this.memoryListBox.Size = new System.Drawing.Size(974, 186);
+            this.memoryListBox.Size = new System.Drawing.Size(1082, 219);
             this.memoryListBox.TabIndex = 0;
             this.memoryListBox.DrawItem += new System.Windows.Forms.DrawItemEventHandler(this.MemoryListBox_DrawItem);
             // 
@@ -1218,6 +1261,19 @@
             this.gotoMemoryAddressItem.Size = new System.Drawing.Size(229, 24);
             this.gotoMemoryAddressItem.Text = "Goto Address...";
             this.gotoMemoryAddressItem.Click += new System.EventHandler(this.GotoMemoryAddressItem_Click);
+            // 
+            // memoryAddressScroller
+            // 
+            this.memoryAddressScroller.AccessibleDescription = "";
+            this.memoryAddressScroller.Dock = System.Windows.Forms.DockStyle.Right;
+            this.memoryAddressScroller.LargeChange = 64;
+            this.memoryAddressScroller.Location = new System.Drawing.Point(1087, 24);
+            this.memoryAddressScroller.Maximum = 65535;
+            this.memoryAddressScroller.Name = "memoryAddressScroller";
+            this.memoryAddressScroller.Size = new System.Drawing.Size(21, 219);
+            this.memoryAddressScroller.SmallChange = 16;
+            this.memoryAddressScroller.TabIndex = 6;
+            this.memoryAddressScroller.Scroll += new System.Windows.Forms.ScrollEventHandler(this.MemoryAddressScroller_Scroll);
             // 
             // menuStrip1
             // 
@@ -1247,7 +1303,6 @@
             this.openRomToolStripMenuItem.Name = "openRomToolStripMenuItem";
             this.openRomToolStripMenuItem.Size = new System.Drawing.Size(172, 26);
             this.openRomToolStripMenuItem.Text = "&Open Rom...";
-            this.openRomToolStripMenuItem.Click += new System.EventHandler(this.openRomToolStripMenuItem_Click);
             // 
             // toolStripMenuItem1
             // 
@@ -1534,6 +1589,7 @@
             this.Name = "MainForm";
             this.Text = "Z80 Emulator";
             this.groupBoxStack.ResumeLayout(false);
+            this.contextMenuAssembly.ResumeLayout(false);
             this.groupBoxRegisters.ResumeLayout(false);
             this.groupBoxRegisters.PerformLayout();
             this.tabRegisters.ResumeLayout(false);
@@ -1542,7 +1598,6 @@
             this.tabRegisterSet2.ResumeLayout(false);
             this.tabRegisterSet2.PerformLayout();
             this.groupBoxDisassembly.ResumeLayout(false);
-            this.contextMenuAssembly.ResumeLayout(false);
             this.groupBoxMemory.ResumeLayout(false);
             this.contextMenuMemory.ResumeLayout(false);
             this.menuStrip1.ResumeLayout(false);
@@ -1560,7 +1615,6 @@
         private System.Windows.Forms.GroupBox groupBoxStack;
         private System.Windows.Forms.GroupBox groupBoxRegisters;
         private System.Windows.Forms.CheckBox hexadecimalCheckBox;
-        private System.Windows.Forms.ListBox listBoxStack;
         private System.Windows.Forms.GroupBox groupBoxDisassembly;
         private VirtualListbox disassemblyListBox;
         private System.Windows.Forms.GroupBox groupBoxMemory;
@@ -1682,6 +1736,8 @@
         private System.Windows.Forms.ToolStripMenuItem gotoMemoryAddressItem;
         private System.Windows.Forms.CheckBox checkBoxUpdateScreen;
         private System.Windows.Forms.Timer timer1;
+        private VirtualListbox stackListBox;
+        private System.Windows.Forms.VScrollBar stackAddressScroller;
     }
 }
 

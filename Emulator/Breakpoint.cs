@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Emulator
 {
@@ -15,7 +12,7 @@ namespace Emulator
                 return x.Address.CompareTo(y.Address);
             }
         }
-        
+
         public int Address { get; set; }
         public Func<bool> Condition { get; set; }
 

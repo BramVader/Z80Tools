@@ -22,7 +22,8 @@ namespace BdosCpm
 
             public override bool Handle(BaseEmulator emulator)
             {
-                if (emulator.Registers is Z80Registers reg)
+                var reg = emulator.GetRegisters<Z80Registers>();
+                if (reg != null)
                 {
                     switch (reg.C)
                     {
@@ -108,7 +109,7 @@ namespace BdosCpm
             // Return immediately from the BDOS call
             MemoryModel.Write(new byte[] { 0xC9 }, 0x0005, true);
 
-            emulator.Registers.PC = 0x100;
+            emulator.GetRegisters<Z80Registers>().PC = 0x100;
 
             console.Show();
         }

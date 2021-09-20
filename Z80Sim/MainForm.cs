@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
-using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -42,7 +42,7 @@ namespace Z80TestConsole
             lastEmulatorMemorySwitch = (bool[])model.MemorySwitch.Clone();
             //InitRam();
 
-            model.Emulator.Registers.CloneTo(lastRegisters);
+            model.Emulator.GetRegisters<Z80Core.Z80Registers>().CloneTo(lastRegisters);
             model.Emulator.OnRunComplete += (sender, args) =>
             {
                 if (this.InvokeRequired)
@@ -60,14 +60,21 @@ namespace Z80TestConsole
             this.model = model;
 
             UpdateMemory(0);
-            UpdateDisassembly(0);
+            UpdateDisassembly(Registers.PC);
+            UpdateStack(Registers.SP);
 
             UpdateRegisters();
             disassemblyListBox.RequestPage += RequestAssemblyPage;
+            stackListBox.RequestPage += RequestStackPage;
             memoryListBox.RequestPage += RequestMemoryPage;
 
             UpdateMemoryCheckboxList(memorySwitch);
+
+            stackListBox.SelectedAddress = 0;
         }
+
+        private Z80Core.Z80Registers Registers =>
+            model.Emulator.GetRegisters<Z80Core.Z80Registers>();
 
         private (HardwareModel, Symbols) LoadCpc464HardwareModel()
         {
@@ -162,7 +169,7 @@ namespace Z80TestConsole
             int hx2 = hexadecimalCheckBox.Checked ? 2 : signedCheckBox.Checked ? -2 : 0;
             int hx4 = hexadecimalCheckBox.Checked ? 4 : signedCheckBox.Checked ? -4 : 0;
 
-            var regs = (model.Emulator.Registers as Z80Core.Z80Registers);
+            var regs = Registers;
             var lastregs = (lastRegisters as Z80Core.Z80Registers);
             setText(textBoxSet0RegA, regs.A, hx2, regs.A != lastregs.A);
             setText(textBoxSet0RegB, regs.B, hx2, regs.B != lastregs.B);
@@ -284,19 +291,22 @@ namespace Z80TestConsole
         private void UpdateAll()
         {
             CheckMemorySwitch();
-            disassemblyListBox.SelectedAddress = model.Emulator.Registers.PC;
-            ScrollIntoView(model.Emulator.Registers.PC);
+            disassemblyListBox.SelectedAddress = Registers.PC;
+            ScrollIntoView(Registers.PC);
             disassemblyListBox.Refresh();
             UpdateRegisters();
             UpdateMemory();
+            UpdateStack(Registers.SP);
         }
 
         private void StartRun()
         {
             // Disable controls;
             hexadecimalCheckBox.Enabled = false;
-            listBoxStack.Enabled = false;
+            stackListBox.Enabled = false;
+            stackAddressScroller.Enabled = false;
             disassemblyListBox.Enabled = false;
+            disassemblyAddressScroller.Enabled = false;
             memoryListBox.Enabled = false;
             openRomToolStripMenuItem.Enabled = false;
             resetToolStripMenuItem.Enabled = false;
@@ -375,8 +385,10 @@ namespace Z80TestConsole
         {
             // Enable controls;
             hexadecimalCheckBox.Enabled = true;
-            listBoxStack.Enabled = true;
+            stackListBox.Enabled = true;
+            stackAddressScroller.Enabled = true;
             disassemblyListBox.Enabled = true;
+            disassemblyAddressScroller.Enabled = true;
             memoryListBox.Enabled = true;
             openRomToolStripMenuItem.Enabled = true;
             resetToolStripMenuItem.Enabled = true;
@@ -480,7 +492,9 @@ namespace Z80TestConsole
 
         private void StopClick(object sender, EventArgs e)
         {
-
+            model.Emulator.Pause();
+            model.Reset();
+            UpdateAll();
         }
 
         private void RestartClick(object sender, EventArgs e)
@@ -502,16 +516,16 @@ namespace Z80TestConsole
 
         private void StepIntoClick(object sender, EventArgs e)
         {
-            model.Emulator.Registers.CloneTo(lastRegisters);
+            Registers.CloneTo(lastRegisters);
             model.Emulator.Emulate();
             UpdateAll();
         }
 
         private void StepOverClick(object sender, EventArgs e)
         {
-            model.Emulator.Registers.CloneTo(lastRegisters);
-            var instruction = disassembler.Disassemble(model.MemoryModel.ReadMemory, model.Emulator.Registers.PC);
-            model.Emulator.TargetAddress = model.Emulator.Registers.PC + instruction.Opcodes.Length;
+            Registers.CloneTo(lastRegisters);
+            var instruction = disassembler.Disassemble(model.MemoryModel.ReadMemory, Registers.PC);
+            model.Emulator.TargetAddress = Registers.PC + instruction.Opcodes.Length;
             StartRun();
         }
 
@@ -539,24 +553,24 @@ namespace Z80TestConsole
             e.DrawBackground();
 
             float itemheight = disassemblyListBox.ItemHeight;
-            var breakpointTextBrush = new SolidBrush(breakpointTextColor);
-            var breakpointBrush = new SolidBrush(breakpointColor);
-            var currentBrush = new SolidBrush(currentColor);
-            var nameBrush = new SolidBrush(nameColor);
-            var commentBrush = new SolidBrush(commentColor);
             var font = disassemblyListBox.Font;
-            var fontBold = new Font(font, FontStyle.Bold);
 
-            var breakpointBorderPen = new Pen(breakpointBorderColor, 2f);
+            using var breakpointTextBrush = new SolidBrush(breakpointTextColor);
+            using var breakpointBrush = new SolidBrush(breakpointColor);
+            using var currentBrush = new SolidBrush(currentColor);
+            using var nameBrush = new SolidBrush(nameColor);
+            using var commentBrush = new SolidBrush(commentColor);
+            using var fontBold = new Font(font, FontStyle.Bold);
+            using var breakpointBorderPen = new Pen(breakpointBorderColor, 2f);
 
             if (disassemblyListBox.Items[e.Index] is DisassemblyResult assemblyLine)
             {
-                var memory1 = model.MemoryModel.GetMemoryDescriptor(model.Emulator.Registers.PC, model.MemorySwitch);
+                var memory1 = model.MemoryModel.GetMemoryDescriptor(Registers.PC, model.MemorySwitch);
                 var memory2 = model.MemoryModel.GetMemoryDescriptor(assemblyLine.Address, memorySwitch);
 
                 var bpIndex = breakpoints.BinarySearch(new Breakpoint { Address = assemblyLine.Address }, new Breakpoint.Comparer());
                 var drawBreakpoint = (bpIndex >= 0);
-                var drawCurrent = IsSameAddress(model.Emulator.Registers.PC, memory1, assemblyLine.Address, memory2);
+                var drawCurrent = IsSameAddress(Registers.PC, memory1, assemblyLine.Address, memory2);
                 var drawCurrentDrag = grabPC != -1 && (ushort)grabPC == assemblyLine.Address;
 
                 float yoffset = e.Bounds.Top;
@@ -604,12 +618,6 @@ namespace Z80TestConsole
                     e.Graphics.DrawString(strings[n], font, textColor, new PointF(xoffsets[n], yoffset));
                 }
             }
-            breakpointTextBrush.Dispose();
-            breakpointBrush.Dispose();
-            currentBrush.Dispose();
-            nameBrush.Dispose();
-            commentBrush.Dispose();
-            fontBold.Dispose();
         }
 
         private void DisassemblyAddressScroller_Scroll(object sender, ScrollEventArgs e)
@@ -621,9 +629,9 @@ namespace Z80TestConsole
 
         void RequestAssemblyPage(object sender, VirtualListbox.RequestPageEventArgs e)
         {
+            int newAdr = 0;
             if (disassemblyListBox.SelectedAddress.HasValue)
             {
-                int newAdr = 0;
                 switch (e.PageType)
                 {
                     case VirtualListbox.RequestPageEventArgs.PagingType.PageUp:
@@ -663,6 +671,22 @@ namespace Z80TestConsole
                         disassemblyAddressScroller.Value = newAdr;
                         return;
                 }
+            }
+            switch (e.PageType)
+            {
+
+                case VirtualListbox.RequestPageEventArgs.PagingType.ScrollUp:
+                    newAdr = CorrectAddress((disassemblyListBox.Items[0] as DisassemblyResult).Address - 1, false);
+                    UpdateDisassembly(newAdr);
+                    disassemblyAddressScroller.Value = newAdr;
+                    return;
+                case VirtualListbox.RequestPageEventArgs.PagingType.ScrollDown:
+                    newAdr = (disassemblyListBox.Items[1] as DisassemblyResult).Address;
+                    UpdateDisassembly(newAdr);
+                    disassemblyAddressScroller.Value = newAdr;
+                    return;
+
+
             }
         }
 
@@ -719,7 +743,7 @@ namespace Z80TestConsole
         {
             e.DrawBackground();
             var memoryLine = memoryListBox.Items[e.Index] as MemoryLine;
-            var font = disassemblyListBox.Font;
+            var font = memoryListBox.Font;
             float yoffset = e.Bounds.Top;
             var sb = new StringBuilder();
             sb.Append(memoryLine.Address.ToString("X4")).Append(' ');
@@ -759,9 +783,9 @@ namespace Z80TestConsole
                 {
                     if (disassemblyListBox.Items[itemIndex] is DisassemblyResult item)
                     {
-                        var memory1 = model.MemoryModel.GetMemoryDescriptor(model.Emulator.Registers.PC, model.MemorySwitch);
+                        var memory1 = model.MemoryModel.GetMemoryDescriptor(Registers.PC, model.MemorySwitch);
                         var memory2 = model.MemoryModel.GetMemoryDescriptor(item.Address, memorySwitch);
-                        if (IsSameAddress(model.Emulator.Registers.PC, memory1, item.Address, memory2))
+                        if (IsSameAddress(Registers.PC, memory1, item.Address, memory2))
                         {
                             origPC = item.Address;
                             grabPC = origPC;
@@ -795,7 +819,7 @@ namespace Z80TestConsole
         {
             if (grabPC != -1 && grabPC != origPC)
             {
-                model.Emulator.Registers.PC = (ushort)grabPC;
+                Registers.PC = (ushort)grabPC;
                 UpdateRegisters();
                 grabPC = -1;
                 disassemblyListBox.Refresh();
@@ -837,7 +861,7 @@ namespace Z80TestConsole
         {
             var inputbox = new InputBox("Goto Address", "Address")
             {
-                Value = model.Emulator.Registers.PC.ToString("X4")
+                Value = Registers.PC.ToString("X4")
             };
             bool ok = false;
             while (!ok)
@@ -868,7 +892,7 @@ namespace Z80TestConsole
         {
             var inputbox = new InputBox("Goto Address", "Address")
             {
-                Value = model.Emulator.Registers.PC.ToString("X4")
+                Value = Registers.PC.ToString("X4")
             };
             bool ok = false;
             while (!ok)
@@ -903,9 +927,161 @@ namespace Z80TestConsole
             timer1.Enabled = checkBoxUpdateScreen.Checked;
         }
 
-        private void openRomToolStripMenuItem_Click(object sender, EventArgs e)
+        private void RequestStackPage(object sender, VirtualListbox.RequestPageEventArgs e)
         {
+            if (stackListBox.SelectedAddress.HasValue)
+            {
+                int newAdr;
+                int nrItems = stackListBox.ClientSize.Height / stackListBox.ItemHeight;
+                switch (e.PageType)
+                {
+                    case VirtualListbox.RequestPageEventArgs.PagingType.PageUp:
+                        newAdr = (stackListBox.SelectedAddress.Value - nrItems * 2) & 0xFFFF;
+                        UpdateStack(newAdr);
+                        stackListBox.SelectedAddress = newAdr;
+                        stackAddressScroller.Value = newAdr;
+                        return;
+                    case VirtualListbox.RequestPageEventArgs.PagingType.PageDown:
+                        newAdr = (stackListBox.SelectedAddress.Value + nrItems * 2) & 0xFFFF;
+                        UpdateStack(newAdr);
+                        stackListBox.SelectedAddress = newAdr;
+                        stackAddressScroller.Value = newAdr;
+                        return;
+                    case VirtualListbox.RequestPageEventArgs.PagingType.LineUp:
+                        newAdr = (stackListBox.SelectedAddress.Value - 2) & 0xFFFF;
+                        UpdateStack(newAdr);
+                        stackListBox.SelectedAddress = newAdr;
+                        stackAddressScroller.Value = newAdr;
+                        return;
+                    case VirtualListbox.RequestPageEventArgs.PagingType.LineDown:
+                        newAdr = (stackListBox.SelectedAddress.Value + 2) & 0xFFFF;
+                        UpdateStack(newAdr);
+                        stackListBox.SelectedAddress = newAdr;
+                        stackAddressScroller.Value = newAdr;
+                        return;
+                    case VirtualListbox.RequestPageEventArgs.PagingType.ToStart:
+                        newAdr = 0;
+                        UpdateStack(newAdr);
+                        stackListBox.SelectedAddress = newAdr;
+                        stackAddressScroller.Value = newAdr;
+                        return;
+                    case VirtualListbox.RequestPageEventArgs.PagingType.ToEnd:
+                        newAdr = 0x10000 - nrItems * 2;
+                        UpdateStack(newAdr);
+                        stackListBox.SelectedAddress = newAdr;
+                        stackAddressScroller.Value = newAdr;
+                        return;
+                }
+            }
+        }
 
+        private void UpdateStack(int address)
+        {
+            int nrItems = stackListBox.ClientSize.Height / stackListBox.ItemHeight;
+            stackListBox.Items.Clear();
+
+            address -= nrItems;
+            int offset = ((address & 1) + ((Registers as Z80Core.Z80Registers).SP & 1)) & 1;
+            address += offset;
+            for (int n = 0; n < nrItems; n++)
+            {
+                stackListBox.Items.Add(new MemoryLine { Address = address });
+                address = (address + 2) & 0xFFFF;
+            }
+            stackListBox.SetSelectedAddress();
+        }
+
+        private void StackListBox_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            e.DrawBackground();
+            float itemheight = stackListBox.ItemHeight;
+            using var currentBrush = new SolidBrush(currentColor);
+            using var breakpointBorderPen = new Pen(breakpointBorderColor, 2f);
+            if (e.Index >= 0)
+            {
+                var memoryLine = stackListBox.Items[e.Index] as MemoryLine;
+                var font = stackListBox.Font;
+                float yoffset = e.Bounds.Top;
+
+                int value = model.MemoryModel.Read((memoryLine.Address) & 0xFFFF, memorySwitch) |
+                    (model.MemoryModel.Read((memoryLine.Address + 1) & 0xFFFF, memorySwitch) << 8);
+
+                string text = $"{memoryLine.Address:X4}: {value:X4}";
+
+                bool drawCurrent = Registers.SP == memoryLine.Address;
+                if (drawCurrent)
+                {
+                    var bpImage = GetBitmap("Current");
+                    e.Graphics.DrawImageUnscaled(bpImage, 0, (int)yoffset - 1);
+                    var textSize = e.Graphics.MeasureString(text, font);
+                    var rect = new RectangleF(20f, yoffset, textSize.Width, e.Bounds.Height);
+                    e.Graphics.FillRectangle(currentBrush, rect.X, rect.Y, rect.Width, itemheight);
+                    e.Graphics.DrawRectangle(breakpointBorderPen, rect.X, rect.Y, rect.Width, itemheight);
+                }
+
+                e.Graphics.DrawString(text, font, Brushes.Black, 20f, yoffset);
+            }
+        }
+
+        private void StackAddressScroller_Scroll(object sender, ScrollEventArgs e)
+        {
+            stackListBox.SelectedAddress = e.NewValue;
+            UpdateStack(e.NewValue);
+        }
+
+        private void RegisterKeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == 13 && sender is TextBox textbox)
+            {
+                string name = textbox.Name;
+                bool swap = false;
+                if (name.StartsWith("textBoxSet0Reg"))
+                {
+                    name = name.Substring("textBoxSet0Reg".Length);
+                }
+                else if (name.StartsWith("textBoxSet1Reg"))
+                {
+                    name = name.Substring("textBoxSet1Reg".Length);
+                    swap = true;
+                }
+                else if (name.StartsWith("textBoxReg"))
+                {
+                    name = name.Substring("textBoxReg".Length);
+                }
+                else
+                {
+                    return;
+                }
+                var property = typeof(Z80Core.Z80Registers).GetProperty(name);
+                if (property == null)
+                    return;
+                if (swap) Registers.Exx();
+                if (!Int32.TryParse(textbox.Text, System.Globalization.NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
+                    return;
+                try
+                {
+                    property.SetValue(Registers, Convert.ChangeType(value, property.PropertyType));
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message);
+                }
+                if (swap) Registers.Exx();
+                UpdateRegisters();
+                Registers.CloneTo(lastRegisters);
+                e.Handled = true;
+
+                if (name == "PC")
+                    UpdateDisassembly(Registers.PC);
+                if (name == "SP")
+                    UpdateStack(Registers.SP);
+            }
+        }
+
+        private void RegisterLeave(object sender, EventArgs e)
+        {
+            UpdateRegisters();
+            Registers.CloneTo(lastRegisters);
         }
     }
 }

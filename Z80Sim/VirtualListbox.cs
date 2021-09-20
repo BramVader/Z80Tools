@@ -19,7 +19,9 @@ namespace Z80TestConsole
                 PageUp,
                 PageDown,
                 ToStart,
-                ToEnd
+                ToEnd,
+                ScrollUp,
+                ScrollDown
             }
 
             public PagingType PageType { get; set; }
@@ -109,6 +111,15 @@ namespace Z80TestConsole
                                 RequestPage?.Invoke(this, new RequestPageEventArgs(RequestPageEventArgs.PagingType.LineDown));
                             break;
                     }
+                    break;
+                case 0x020A: //WM_MOUSEWHEEL
+                    int delta = 4 * (int)(short)((long)m.WParam >> 16) / 120;
+                    if (delta < 0)
+                        for (int step = 0; step < -delta; step++)
+                            RequestPage?.Invoke(this, new RequestPageEventArgs(RequestPageEventArgs.PagingType.ScrollDown));
+                    else if (delta > 0)
+                        for (int step = 0; step < delta; step++)
+                            RequestPage?.Invoke(this, new RequestPageEventArgs(RequestPageEventArgs.PagingType.ScrollUp));
                     break;
                 default:
                     base.WndProc(ref m);

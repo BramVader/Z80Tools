@@ -1,25 +1,21 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Emulator
 {
     public abstract class BaseEmulator
     {
-        public class OnCpuStepEventArgs: EventArgs
+        public class OnCpuStepEventArgs : EventArgs
         {
             public long StateCounter { get; set; }
         }
 
-        public class OnBreakpointHitEventArgs: EventArgs
+        public class OnBreakpointHitEventArgs : EventArgs
         {
             public Breakpoint Breakpoint { get; set; }
         }
-        
+
         protected BaseRegisters registers;
         protected bool pauseRequest;
         protected bool running;
@@ -32,7 +28,7 @@ namespace Emulator
         protected double clockFrequency;        // [MHz]
         protected long targetStatesPerSecond;   // Desired number of states per second, given clockFrequency
         protected Breakpoint[] breakpoints;
-        
+
         public abstract void Emulate();
         public abstract void Reset();
 
@@ -76,8 +72,8 @@ namespace Emulator
         public double ClockFrequency
         {
             get { return clockFrequency; }
-            set 
-            { 
+            set
+            {
                 clockFrequency = value;
                 targetStatesPerSecond = (long)(clockFrequency * 1E6);
             }
@@ -151,9 +147,9 @@ namespace Emulator
             runComplete.WaitOne();
         }
 
-        public BaseRegisters Registers
+        public TReg GetRegisters<TReg>() where TReg : BaseRegisters
         {
-            get { return registers; }
+            return registers as TReg;
         }
 
         public Func<int, byte> ReadMemory { get; set; }
