@@ -40,5 +40,10 @@ namespace BdosCpm
         {
             Write(st + "\r\n");
         }
+
+        public void Reset()
+        {
+            consoleTextBox.Clear();
+        }
     }
 }

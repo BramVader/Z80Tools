@@ -1,0 +1,11 @@
+org 100h
+ld hl, 1000h
+ld a, 0ffh
+ld b, 0h  ; means 256 times
+loop: inc a
+push af
+pop de
+ld (hl),e
+inc hl
+djnz loop
+jr loop

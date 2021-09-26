@@ -24,15 +24,26 @@ namespace Z80TestConsole
         private readonly Color commentColor = Color.FromArgb(80, 80, 80);
 
         private readonly BaseDisassembler disassembler;
+        private readonly ToolTip toolTip1;
         private readonly List<Breakpoint> breakpoints;
         private readonly BaseRegisters lastRegisters = new Z80Core.Z80Registers();
         private readonly HardwareModel model;
         private readonly bool[] memorySwitch;
         private readonly bool[] lastEmulatorMemorySwitch;
 
+        private string hoverOperand = null;
+
         public MainForm()
         {
             InitializeComponent();
+
+            toolTip1 = new ToolTip
+            {
+                InitialDelay = 400,
+                AutomaticDelay = 400,
+                AutoPopDelay = 400,
+                ReshowDelay = 400
+            };
 
             breakpoints = new List<Breakpoint>();
             //(var model, var symbols) = LoadCpc464HardwareModel();
@@ -84,7 +95,7 @@ namespace Z80TestConsole
         private (HardwareModel, Symbols) LoadBdosHardwareModel()
         {
             var model = new BdosModel();
-            return (new BdosModel(), model.Symbols);
+            return (model, model.Symbols);
         }
 
         private void InitRam()
@@ -488,16 +499,16 @@ namespace Z80TestConsole
         private void PauseClick(object sender, EventArgs e)
         {
             model.Emulator.Pause();
+            UpdateAll();
         }
 
         private void StopClick(object sender, EventArgs e)
         {
             model.Emulator.Pause();
-            model.Reset();
             UpdateAll();
         }
 
-        private void RestartClick(object sender, EventArgs e)
+        private void ResetClick(object sender, EventArgs e)
         {
             model.Emulator.Pause();
             model.Reset();
@@ -798,12 +809,94 @@ namespace Z80TestConsole
 
         }
 
+        private static HashSet<string> callInstructions = new HashSet<string>
+        {
+            "CALL", "JP", "JR", "DJNZ"
+        };
+
+        private string GetItemInfo(string mnemonic, string operand, int index)
+        {
+            if (Char.IsLetterOrDigit(operand[index]))
+            {
+                int index1 = index;
+                int? offset = null;
+                int? byteVal = null;
+                int? wordVal = null;
+                bool isConstant = false;
+                bool isCodeAddress = callInstructions.Contains(mnemonic) && !operand.Contains('(');
+                while (index1 > 0 && Char.IsLetterOrDigit(operand[index1 - 1])) index1--;
+                int index2 = index;
+                while (index2 < operand.Length - 1 && Char.IsLetterOrDigit(operand[index2 + 1])) index2++;
+                string oper1 = operand[index1..(index2 + 1)];
+
+                if ((oper1 == "IX" || oper1 == "IY")
+                    && index2 < operand.Length - 2
+                    && operand[index2 + 1] == ' '
+                    && operand[index2 + 2] == '+')
+                {
+                    index2 += 3;
+                    int index3 = index2;
+                    while (index2 < operand.Length - 1 && Char.IsDigit(operand[index2 + 1])) index2++;
+                    offset = Int32.Parse(operand[index3..(index2 + 1)]);
+                }
+                while (index1 > 0 && Char.IsLetterOrDigit(operand[index1 - 1])) index1--;
+
+                // Operand is a hexadecimal number?
+                if (oper1.StartsWith("0x"))
+                {
+                    int val = Int32.Parse(oper1[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                    if (oper1.Length == 4)
+                        byteVal = val;
+                    else
+                        wordVal = val;
+                    isConstant = true;
+                }
+                else
+                // Operand is a symbol?
+                {
+                    var symbol = disassembler.Symbols.FindSymbols(oper1).FirstOrDefault();
+                    if (symbol != null)
+                        wordVal = symbol.Value;
+                }
+                // Operand is a register?
+                if (byteVal == null && wordVal == null)
+                {
+                    if (oper1.Contains("AF"))
+                        isCodeAddress = true;
+                    var regprops = Registers.GetType().GetProperties();
+                    var byteProp = regprops.FirstOrDefault(it => it.Name == oper1 && it.PropertyType == typeof(byte));
+                    if (byteProp != null)
+                        byteVal = (int)(byte)byteProp.GetValue(Registers);
+                    else
+                    {
+                        var wordProp = regprops.FirstOrDefault(it => it.Name == oper1 && it.PropertyType == typeof(ushort));
+                        if (wordProp != null)
+                            wordVal = (int)(ushort)wordProp.GetValue(Registers);
+                    }
+                }
+
+                if (wordVal != null)
+                {
+                    int target = (wordVal.Value + offset.GetValueOrDefault()) & 0xFFFF;
+                    return (isConstant ? "" : $"{oper1} = 0x{wordVal:X4}\n") +
+                        (!offset.HasValue ? "" : $"{oper1} + {offset} = 0x{target:X4}\n") +
+                        (isCodeAddress ? "" : $"(0x{target:X4}) = 0x{model.MemoryModel.Read(target, memorySwitch):X2}\n")
+                        .Trim('\n');
+                }
+                if (byteVal != null)
+                {
+                    return isConstant ? "" : $"{oper1} = {byteVal:X2}\r\n";
+                }
+            }
+            return null;
+        }
+
+
         private void DisassemblyListBox_MouseMove(object sender, MouseEventArgs e)
         {
             if (grabPC != -1)
             {
                 var itemIndex = disassemblyListBox.IndexFromPoint(e.Location);
-                Text = itemIndex.ToString();
                 if (itemIndex >= 0)
                 {
                     if (disassemblyListBox.Items[itemIndex] is DisassemblyResult item)
@@ -811,6 +904,37 @@ namespace Z80TestConsole
                         grabPC = item.Address;
                         disassemblyListBox.Refresh();
                     }
+                }
+            }
+            else
+            {
+                hoverOperand = null;
+
+                var itemIndex = disassemblyListBox.IndexFromPoint(e.Location);
+                if (itemIndex >= 0
+                    && disassemblyListBox.Items[itemIndex] is DisassemblyResult assemblyLine
+                    && !String.IsNullOrEmpty(assemblyLine.Operands)
+                )
+                {
+                    using var graphics = Graphics.FromHwnd(this.Handle);
+                    var textSize2 = graphics.MeasureString(assemblyLine.Operands, disassemblyListBox.Font);
+                    int textIndex = (int)((e.Location.X - 160f) * assemblyLine.Operands.Length / textSize2.Width);
+                    if (textIndex >= 0 && textIndex < assemblyLine.Operands.Length)
+                    {
+                        hoverOperand = GetItemInfo(assemblyLine.Mnemonic, assemblyLine.Operands, textIndex);
+                        if (hoverOperand != null)
+                        {
+                            toolTip1.Show(hoverOperand, disassemblyListBox, disassemblyListBox.PointToClient(new Point(Cursor.Position.X, Cursor.Position.Y + 16)));
+                        }
+                    }
+                    else
+                    {
+
+                    }
+                }
+                if (hoverOperand == null)
+                {
+                    toolTip1.Hide(disassemblyListBox);
                 }
             }
         }
@@ -919,7 +1043,8 @@ namespace Z80TestConsole
 
         private void Timer1_Tick(object sender, EventArgs e)
         {
-            (model as CPCAmstrad.CPC464Model).CPCScreen.Map();
+            (model as CPCAmstrad.CPC464Model)?.CPCScreen?.Map();
+            UpdateAll();
         }
 
         private void CheckBoxUpdateScreen_CheckedChanged(object sender, EventArgs e)
@@ -1105,5 +1230,6 @@ namespace Z80TestConsole
                 thisTextBox.SelectAll();
             }
         }
+
     }
 }

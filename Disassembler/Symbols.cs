@@ -6,32 +6,56 @@ using System.Text;
 
 namespace Disassembler
 {
-    public class Symbols: List<Symbol>
+    public class Symbols
     {
+        IDictionary<string, IList<Symbol>> symbolsByName = new Dictionary<string, IList<Symbol>>();
+        IDictionary<int, IList<Symbol>> symbolsByValue = new Dictionary<int, IList<Symbol>>();
+
         public Symbols() : base()
         {
         }
 
         public Symbols(IEnumerable<Symbol> collection)
-            : base(collection)
         {
+            foreach (var symbol in collection)
+                Add(symbol);
+        }
+
+        public void Add(Symbol symbol)
+        {
+            IList<Symbol> list;
+            if (symbol.Name != null)
+            {
+                if (!symbolsByName.TryGetValue(symbol.Name, out list))
+                {
+                    list = new List<Symbol>();
+                    symbolsByName.Add(symbol.Name, list);
+                }
+                if (!list.Any(it => it.Value == symbol.Value))
+                    list.Add(symbol);
+            }
+
+            if (!symbolsByValue.TryGetValue(symbol.Value, out list))
+            {
+                list = new List<Symbol>();
+                symbolsByValue.Add(symbol.Value, list);
+            }
+            if (!list.Any(it => it.Name == symbol.Name))
+                list.Add(symbol);
         }
 
         public IEnumerable<Symbol> FindSymbols(int address)
         {
-            var check = new Symbol() { Value = address };
-            var comparer = new Symbol.Comparer();
-            int index = this.BinarySearch(check, comparer);
-            var results = new List<Symbol>();
-            if (index >= 0)
-            {
-                while (index >= 0 && comparer.Compare(check, this[index]) == 0)
-                    index--;
-                index++;
-                while (index < Count && comparer.Compare(check, this[index]) == 0)
-                    results.Add(this[index++]);
-            }
-            return results;
+            if (!symbolsByValue.TryGetValue(address, out var list))
+                list = new List<Symbol>();
+            return list;
+        }
+
+        public IEnumerable<Symbol> FindSymbols(string name)
+        {
+            if (!symbolsByName.TryGetValue(name, out var list))
+                list = new List<Symbol>();
+            return list;
         }
 
         public static Symbols Load(string filename)
@@ -66,7 +90,6 @@ namespace Disassembler
                     }
                 }
             }
-            list.Sort(new Symbol.Comparer());
             return list;
         }
     }

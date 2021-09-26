@@ -37,6 +37,7 @@ namespace BdosCpm
                             // Output can be paused with ^S and restarted with ^Q (or any key under
                             // versions prior to CP/M 3). While the output is paused, the program can
                             // be terminated with ^C.
+                            console.Write(new String((char)reg.E, 1));
                             break;
                         case 9:     // C_WRITESTR
                             // DE=address of string.
@@ -55,7 +56,9 @@ namespace BdosCpm
                             }
                             while (addr != laddr);
                             if (sb.Length > 0)
-                                console.WriteLine(sb.ToString());
+                                console.Write(sb.ToString().Replace("\r", "").Replace("\n", "\r\n"));
+                            break;
+                        default:
                             break;
                     }
                 }
@@ -82,7 +85,7 @@ namespace BdosCpm
             // Create Z80 emulator
             this.emulator = new Z80Emulator
             {
-                ClockFrequency = 4.0, // MHz
+                ClockFrequency = 100.0, // MHz
                 ReadMemory = memoryModel.ReadMemory,
                 WriteMemory = memoryModel.WriteMemory,
                 ReadInput = ReadInput,
@@ -95,13 +98,20 @@ namespace BdosCpm
             using var sr = new StreamReader(new FileStream(@"C:\Development\Private\Z80Tools\Z80Validator\bin\Debug\net5.0\output.lst", FileMode.Open, FileAccess.Read, FileShare.Read));
             this.Symbols = listFileReader.Read(sr);
 
+            this.console = new Console();
+
+            Reset();
+
+            console.Show();
+        }
+
+        public override void Reset()
+        {
             using var br = new BinaryReader(new FileStream(@"C:\Development\Private\Z80Tools\Z80Validator\bin\Debug\net5.0\output.bin", FileMode.Open, FileAccess.Read, FileShare.Read));
             var bytes = new byte[0x10000];
             int numRead = br.Read(bytes, 0, bytes.Length);
             Array.Resize(ref bytes, numRead);
             MemoryModel.Write(bytes, 0x0100, true);
-
-            this.console = new Console();
 
             // Put a special breakpoint (one that doesn't pause) on address 5
             emulator.AddBreakpoint(new BdosBreakpoint(memoryModel, console) { Address = 0x0005 });
@@ -110,12 +120,7 @@ namespace BdosCpm
             MemoryModel.Write(new byte[] { 0xC9 }, 0x0005, true);
 
             emulator.GetRegisters<Z80Registers>().PC = 0x100;
-
-            console.Show();
-        }
-
-        public override void Reset()
-        {
+            console.Reset();
         }
 
         protected override byte ReadInput(int address)

@@ -6,7 +6,7 @@ using Symbol = Disassembler.Symbol;
 
 namespace Z80Core
 {
-    public class Z80Disassembler: BaseDisassembler
+    public class Z80Disassembler : BaseDisassembler
     {
 
         public static string FormatByte(byte b)
@@ -66,6 +66,8 @@ namespace Z80Core
             this.document = document;
             this.symbols = symbols;
         }
+
+        public override Symbols Symbols => symbols;
 
         public override DisassemblyResult Disassemble(Func<int, byte> memory, int address)
         {

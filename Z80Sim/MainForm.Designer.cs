@@ -147,7 +147,7 @@
             this.runButton = new System.Windows.Forms.ToolStripButton();
             this.pauseButton = new System.Windows.Forms.ToolStripButton();
             this.stopButton = new System.Windows.Forms.ToolStripButton();
-            this.restartButton = new System.Windows.Forms.ToolStripButton();
+            this.resetButton = new System.Windows.Forms.ToolStripButton();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.runToCursorButton = new System.Windows.Forms.ToolStripButton();
             this.stepIntoButton = new System.Windows.Forms.ToolStripButton();
@@ -1478,7 +1478,7 @@
             | System.Windows.Forms.Keys.F5)));
             this.restartToolStripMenuItem.Size = new System.Drawing.Size(266, 26);
             this.restartToolStripMenuItem.Text = "Restart";
-            this.restartToolStripMenuItem.Click += new System.EventHandler(this.RestartClick);
+            this.restartToolStripMenuItem.Click += new System.EventHandler(this.ResetClick);
             // 
             // toolStripMenuItem3
             // 
@@ -1509,7 +1509,7 @@
             this.runButton,
             this.pauseButton,
             this.stopButton,
-            this.restartButton,
+            this.resetButton,
             this.toolStripSeparator1,
             this.runToCursorButton,
             this.stepIntoButton,
@@ -1555,16 +1555,16 @@
             this.stopButton.Text = "toolStripButton3";
             this.stopButton.Click += new System.EventHandler(this.StopClick);
             // 
-            // restartButton
+            // resetButton
             // 
-            this.restartButton.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
-            this.restartButton.Image = ((System.Drawing.Image)(resources.GetObject("restartButton.Image")));
-            this.restartButton.ImageScaling = System.Windows.Forms.ToolStripItemImageScaling.None;
-            this.restartButton.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.restartButton.Name = "restartButton";
-            this.restartButton.Size = new System.Drawing.Size(29, 22);
-            this.restartButton.Text = "toolStripButton4";
-            this.restartButton.Click += new System.EventHandler(this.RestartClick);
+            this.resetButton.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            this.resetButton.Image = ((System.Drawing.Image)(resources.GetObject("resetButton.Image")));
+            this.resetButton.ImageScaling = System.Windows.Forms.ToolStripItemImageScaling.None;
+            this.resetButton.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.resetButton.Name = "resetButton";
+            this.resetButton.Size = new System.Drawing.Size(29, 22);
+            this.resetButton.Text = "Reset";
+            this.resetButton.Click += new System.EventHandler(this.ResetClick);
             // 
             // toolStripSeparator1
             // 
@@ -1718,7 +1718,7 @@
         private System.Windows.Forms.ToolStripButton runButton;
         private System.Windows.Forms.ToolStripButton pauseButton;
         private System.Windows.Forms.ToolStripButton stopButton;
-        private System.Windows.Forms.ToolStripButton restartButton;
+        private System.Windows.Forms.ToolStripButton resetButton;
         private System.Windows.Forms.ToolStripButton runToCursorButton;
         private System.Windows.Forms.ToolStripMenuItem restartToolStripMenuItem;
         private System.Windows.Forms.ToolStripButton stepIntoButton;
