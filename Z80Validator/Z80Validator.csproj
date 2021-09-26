@@ -8,10 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="TestCode\Inc8bit.a80" />
     <None Remove="zexall.a80" />
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="TestCode\Inc8bit.a80" />
     <EmbeddedResource Include="zexall.a80" />
   </ItemGroup>
 

@@ -85,9 +85,9 @@ namespace Z80Core
         private ParameterExpression par;
         private MemberExpression readByteProp, writeByteProp;
         private MemberExpression readInputProp, writeOutputProp;
-        private Expression readImmediateByte, readImmediateWord;
+        private Expression readImmediateByte, readImmediateWord, readImmediateOffset;
         private MemberExpression regs;
-        private MemberExpression flagCY, flagN, flagPV, flagHC, flagZ, flagS;
+        private MemberExpression flagCY, flagN, flagPV, flagHC, flagZ, flagS, flagX1, flagX2;
         private MemberExpression iff1, iff2, im;
         private MemberExpression regA, regB, regC, regD, regE, regH, regL;
         private MemberExpression regBC, regDE, regHL, regSP, regPC, regAF;
@@ -391,7 +391,7 @@ namespace Z80Core
                     timingED[col * 16 + row + 0x40].StatesNormal = timingB[row, col] & 0xFF;
                     timingED[col * 16 + row + 0x40].StatesLow = timingB[row, col] >> 8;
                 }
-            
+
             // LDIR/INIR/OTIR etc.
             for (int row = 0; row < 4; row++)
             {
@@ -464,6 +464,8 @@ namespace Z80Core
             flagHC = GetMember<Z80Registers>(regs, p => p.HC);
             flagZ = GetMember<Z80Registers>(regs, p => p.Z);
             flagS = GetMember<Z80Registers>(regs, p => p.S);
+            flagX1 = GetMember<Z80Registers>(regs, p => p.X1);
+            flagX2 = GetMember<Z80Registers>(regs, p => p.X2);
 
             // 8-bit registers
             regB = GetMember<Z80Registers>(regs, p => p.B);
@@ -498,9 +500,9 @@ namespace Z80Core
 
             takeStatesLow = Expression.Assign(GetMember<Z80Registers>(regs, p => p.TakeStatesLow), Expression.Constant(true));
 
-            readReg8 = new Expression[] { 
+            readReg8 = new Expression[] {
                     regB, regC, regD, regE, regH, regL,
-                    Expression.Invoke(readByteProp, cInt(regHL)), 
+                    Expression.Invoke(readByteProp, cInt(regHL)),
                     regA
                 };
             writeReg8 = new Func<Expression, Expression>[] {
@@ -530,6 +532,13 @@ namespace Z80Core
 
             // Reading 8-bit and 16-bit operands
             readImmediateByte = Expression.Invoke(readByteProp, cInt(Expression.PostIncrementAssign(regPC)));
+            readImmediateOffset = Expression.Subtract(
+                Expression.ExclusiveOr(
+                    Expression.Convert(readImmediateByte, typeof(int)),
+                    Expression.Constant(128)
+                 ),
+                Expression.Constant(128)
+            );
             readImmediateWord =
                 cWord(
                     Expression.Or(
@@ -771,7 +780,7 @@ namespace Z80Core
 
         private void ControlStructures()
         {
-            var conditions = new Expression[] 
+            var conditions = new Expression[]
                 {
                     Expression.Not(flagZ), flagZ,
                     Expression.Not(flagCY), flagCY,
@@ -782,12 +791,7 @@ namespace Z80Core
             var jumpRel =
                 cWord(
                     Expression.Add(
-                        cInt(
-                            Expression.Convert(
-                                readImmediateByte,
-                                typeof(sbyte)
-                            )
-                        ),
+                        readImmediateOffset,
                         cInt(
                             regPC
                         )
@@ -892,22 +896,17 @@ namespace Z80Core
             }
 
             // DJNZ
-            var rel = Expression.Variable(typeof(byte));
+            var rel = Expression.Variable(typeof(int));
             microExpr[0x10] = Expression.Block(
                 new[] { rel },
-                Expression.Assign(rel, readImmediateByte),
+                Expression.Assign(rel, readImmediateOffset),
                 Expression.Assign(regB, addByte(regB, -1)),
-                Expression.IfThenElse(Expression.NotEqual(regB, Expression.Constant((byte)0)),
+                Expression.IfThenElse(Expression.NotEqual(cInt(regB), Expression.Constant(0)),
                     Expression.Assign(
                         regPC,
                         cWord(
-                            Expression.Add(
-                                cInt(
-                                    Expression.Convert(
-                                        rel,
-                                        typeof(sbyte)
-                                    )
-                                ),
+                            Expression.AddChecked(
+                                rel,
                                 cInt(regPC)
                             )
                         )
@@ -933,6 +932,8 @@ namespace Z80Core
                     Expression.Assign(temp1, Expression.Increment(Expression.Convert(readReg8[reg], typeof(int)))),
                     writeReg8[reg](Expression.Convert(temp1, typeof(byte))),
                     Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
+                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
+                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
                     Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
                     Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, Expression.Constant(0x0F)), Expression.Constant(0x00))),
                     Expression.Assign(flagPV, Expression.Equal(temp1, Expression.Constant(0x80))),
@@ -950,6 +951,8 @@ namespace Z80Core
                     Expression.Assign(temp1, Expression.Increment(cInt(Expression.Invoke(readByteProp, cInt(temp4))))),
                     Expression.Invoke(writeByteProp, cInt(temp4), cByte(temp1)),
                     Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
+                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
+                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
                     Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
                     Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, Expression.Constant(0x0F)), Expression.Constant(0x00))),
                     Expression.Assign(flagPV, Expression.Equal(temp1, Expression.Constant(0x80))),
@@ -970,6 +973,8 @@ namespace Z80Core
                     Expression.Assign(temp1, Expression.And(Expression.Subtract(Expression.Convert(readReg8[reg], typeof(int)), Expression.Constant(1)), Expression.Constant(0xFF))),
                     writeReg8[reg](Expression.Convert(temp1, typeof(byte))),
                     Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
+                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
+                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
                     Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
                     Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, Expression.Constant(0x0F)), Expression.Constant(0x0F))),
                     Expression.Assign(flagPV, Expression.Equal(temp1, Expression.Constant(0x7F))),
@@ -987,6 +992,8 @@ namespace Z80Core
                     Expression.Assign(temp1, Expression.Decrement(cInt(Expression.Invoke(readByteProp, cInt(temp4))))),
                     Expression.Invoke(writeByteProp, cInt(temp4), cByte(temp1)),
                     Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
+                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
+                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
                     Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
                     Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, Expression.Constant(0x0F)), Expression.Constant(0x0F))),
                     Expression.Assign(flagPV, Expression.Equal(temp1, Expression.Constant(0x7F))),
@@ -1086,7 +1093,7 @@ namespace Z80Core
             // ADD(C) HL, <reg16>
             for (int reg = 0; reg < 8; reg++)
             {
-                var code = new List<Expression> 
+                var code = new List<Expression>
                     {
                         Expression.Assign(temp1, cInt(regHL)),
                         Expression.Assign(temp2, cInt(readReg16[reg % 4])),
@@ -1104,11 +1111,11 @@ namespace Z80Core
                         Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFFFF)), Expression.Constant(0x0000))),
                         Expression.Assign(flagPV, Expression.AndAlso(
                             Expression.Equal(
-                                Expression.And(temp1, Expression.Constant(0x8000)), 
+                                Expression.And(temp1, Expression.Constant(0x8000)),
                                 Expression.And(temp2, Expression.Constant(0x8000))
                             ),
                             Expression.NotEqual(
-                                Expression.And(temp1, Expression.Constant(0x8000)), 
+                                Expression.And(temp1, Expression.Constant(0x8000)),
                                 Expression.And(temp3, Expression.Constant(0x8000))
                             )
                         )),
@@ -1130,7 +1137,7 @@ namespace Z80Core
             // SBC HL, <reg16>
             for (int reg = 0; reg < 4; reg++)
             {
-                var code = new List<Expression> 
+                var code = new List<Expression>
                     {
                         Expression.Assign(temp1, cInt(regHL)),
                         Expression.Assign(temp2, cInt(readReg16[reg])),
@@ -1148,11 +1155,11 @@ namespace Z80Core
                         Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFFFF)), Expression.Constant(0x0000))),
                         Expression.Assign(flagPV, Expression.AndAlso(
                             Expression.NotEqual(
-                                Expression.And(temp1, Expression.Constant(0x8000)), 
+                                Expression.And(temp1, Expression.Constant(0x8000)),
                                 Expression.And(temp2, Expression.Constant(0x8000))
                             ),
                             Expression.NotEqual(
-                                Expression.And(temp1, Expression.Constant(0x8000)), 
+                                Expression.And(temp1, Expression.Constant(0x8000)),
                                 Expression.And(temp3, Expression.Constant(0x8000))
                             )
                         )),
@@ -1877,7 +1884,7 @@ namespace Z80Core
             microExpr[0xFB] = Expression.Block(
                 Expression.Assign(iff1, Expression.Constant(true)),
                 Expression.Assign(iff2, Expression.Constant(true)),
-                Expression.Assign(maskInterruptsNextProp, Expression.Constant(true))  // Interrupts are masked after execution of EI 
+                Expression.Assign(maskInterruptsNextProp, Expression.Constant(true))  // Interrupts are masked after execution of EI
             );
 
             // IM0
@@ -1992,7 +1999,7 @@ namespace Z80Core
             var nextOpcodeProp = GetMember<Z80Registers>(regs, p => p.NextOpcode);
             var statesNormalProp = Expression.Property(timingProp, "StatesNormal");
             var statesLowProp = Expression.Property(timingProp, "StatesLow");
-            handleIntExpr = 
+            handleIntExpr =
                 Expression.Block(
                     new[] { dataOnBusPar },
                     Expression.Assign(regR, cByte(Expression.Increment(cInt(regR)))),

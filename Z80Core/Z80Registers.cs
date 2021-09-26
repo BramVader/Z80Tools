@@ -166,6 +166,18 @@ namespace Z80Core
             set { flagS = value; }
         }
 
+        public bool X1
+        {
+            get { return flagX1; }
+            set { flagX1 = value; }
+        }
+
+        public bool X2
+        {
+            get { return flagX2; }
+            set { flagX2 = value; }
+        }
+
         public byte A
         {
             get { return a; }
