@@ -271,12 +271,12 @@ namespace Z80TestConsole
             return correctUp ? adr1 : adr2;
         }
 
-        private void ScrollIntoView(ushort address)
+        private void ScrollIntoView(int address)
         {
             var first = disassemblyListBox.Items[0] as DisassemblyResult;
             var last = disassemblyListBox.Items[^1] as DisassemblyResult;
-            var range = (ushort)(last.Address - first.Address);
-            var nrange = (ushort)(address - first.Address);
+            var range = last.Address - first.Address;
+            var nrange = (address - first.Address) & 0xFFFF;
             if (nrange >= range)
             {
                 UpdateDisassembly(address);

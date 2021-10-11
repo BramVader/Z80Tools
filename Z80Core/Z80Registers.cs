@@ -1,20 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Emulator;
+using System;
 using System.Diagnostics;
-using System.Text;
-using Emulator;
 
 namespace Z80Core
 {
     [Flags]
-    public enum Flags : byte
+    public enum Flags : int
     {
         CY = 0x01,     // Carry flag (Bit 0)
         N = 0x02,     // Add/Subtract flag (Bit 1)
         PV = 0x04,     // Parity/Overflow flag (Bit 2, V=overflow)
-        X1 = 0x08,     // Not used (Bit 3) TODO: should be bit3 of the result
+        X1 = 0x08,     // Not used (Bit 3) - Contains Bit 3 of the result
         HC = 0x10,     // Half Carry flag (Bit 4)
-        X2 = 0x20,     // Not used (Bit 5) TODO: should be bit5 of the result
+        X2 = 0x20,     // Not used (Bit 5) - Contains Bit 5 of the result 
         Z = 0x40,     // Zero flag (Bit 6)
         S = 0x80      // Sign flag (Bit 7)
     }
@@ -22,45 +20,30 @@ namespace Z80Core
     public class Z80Registers : BaseRegisters
     {
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagCY;
+        private Flags f;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagN;
+        private int a;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagPV;
+        private int bc;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagHC;
+        private int de;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagZ;
+        private int hl;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagS;
+        private int ix;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagX1;
+        private int iy;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private bool flagX2;
+        private int sp;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private byte a;
+        private int af_;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort bc;
+        private int bc_;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort de;
+        private int de_;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort hl;
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort ix;
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort iy;
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort sp;
-
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort af_;
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort bc_;
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort de_;
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private ushort hl_;
+        private int hl_;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private bool iff1;
@@ -69,9 +52,9 @@ namespace Z80Core
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private int im;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private byte i;
+        private int i;
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        private byte r;
+        private int r;
 
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -117,14 +100,14 @@ namespace Z80Core
 
         public void ExAf()
         {
-            ushort saveAF = AF;
+            int saveAF = AF;
             AF = af_;
             af_ = saveAF;
         }
 
         public void Exx()
         {
-            ushort save;
+            int save;
             save = bc; bc = bc_; bc_ = save;
             save = de; de = de_; de_ = save;
             save = hl; hl = hl_; hl_ = save;
@@ -132,187 +115,170 @@ namespace Z80Core
 
         public bool CY
         {
-            get { return flagCY; }
-            set { flagCY = value; }
+            get { return f.HasFlag(Flags.CY); }
+            set { f = value ? f | Flags.CY : f & ~Flags.CY; }
         }
 
         public bool N
         {
-            get { return flagN; }
-            set { flagN = value; }
+            get { return f.HasFlag(Flags.N); }
+            set { f = value ? f | Flags.N : f & ~Flags.N; }
         }
 
         public bool PV
         {
-            get { return flagPV; }
-            set { flagPV = value; }
+            get { return f.HasFlag(Flags.PV); }
+            set { f = value ? f | Flags.PV : f & ~Flags.PV; }
         }
 
         public bool HC
         {
-            get { return flagHC; }
-            set { flagHC = value; }
+            get { return f.HasFlag(Flags.HC); }
+            set { f = value ? f | Flags.HC : f & ~Flags.HC; }
         }
 
         public bool Z
         {
-            get { return flagZ; }
-            set { flagZ = value; }
+            get { return f.HasFlag(Flags.Z); }
+            set { f = value ? f | Flags.Z : f & ~Flags.Z; }
         }
 
         public bool S
         {
-            get { return flagS; }
-            set { flagS = value; }
+            get { return f.HasFlag(Flags.S); }
+            set { f = value ? f | Flags.S : f & ~Flags.S; }
         }
 
         public bool X1
         {
-            get { return flagX1; }
-            set { flagX1 = value; }
+            get { return f.HasFlag(Flags.X1); }
+            set { f = value ? f | Flags.X1 : f & ~Flags.X1; }
         }
 
         public bool X2
         {
-            get { return flagX2; }
-            set { flagX2 = value; }
+            get { return f.HasFlag(Flags.X2); }
+            set { f = value ? f | Flags.X2 : f & ~Flags.X2; }
         }
 
-        public byte A
+        public int A
         {
             get { return a; }
-            set { a = value; }
+            set { a = value & 0xFF; }
         }
 
-        public byte F
+        public int F
         {
             get
             {
-                return (byte)(
-                    (flagCY ? (int)Flags.CY : 0) |
-                    (flagN ? (int)Flags.N : 0) |
-                    (flagPV ? (int)Flags.PV : 0) |
-                    (flagHC ? (int)Flags.HC : 0) |
-                    (flagZ ? (int)Flags.Z : 0) |
-                    (flagS ? (int)Flags.S : 0) |
-                    (flagX1 ? (int)Flags.X1 : 0) |
-                    (flagX2 ? (int)Flags.X2 : 0)
-                );
+                return (int)f;
             }
             set
             {
-                int val = (int)value;
-                flagCY = (val & (int)Flags.CY) != 0;
-                flagN = (val & (int)Flags.N) != 0;
-                flagPV = (val & (int)Flags.PV) != 0;
-                flagHC = (val & (int)Flags.HC) != 0;
-                flagZ = (val & (int)Flags.Z) != 0;
-                flagS = (val & (int)Flags.S) != 0;
-                flagX1 = (val & (int)Flags.X1) != 0;
-                flagX2 = (val & (int)Flags.X2) != 0;
+                f = (Flags)value;
             }
         }
 
-        public ushort BC
+        public int BC
         {
             get { return bc; }
-            set { bc = value; }
+            set { bc = value & 0xFFFF; }
         }
 
-        public ushort DE
+        public int DE
         {
             get { return de; }
-            set { de = value; }
+            set { de = value & 0xFFFF; }
         }
 
-        public ushort HL
+        public int HL
         {
             get { return hl; }
-            set { hl = value; }
+            set { hl = value & 0xFFFF; }
         }
 
-        public byte B
+        public int B
         {
-            get { return (byte)(bc >> 8); }
-            set { bc = (ushort)(bc & 0x00FF | (value << 8)); }
+            get { return bc >> 8; }
+            set { bc = bc & 0x00FF | ((value & 0xFF) << 8); }
         }
 
-        public byte C
+        public int C
         {
-            get { return (byte)bc; }
-            set { bc = (ushort)(bc & 0xFF00 | value); }
+            get { return bc & 0xFF; }
+            set { bc = bc & 0xFF00 | (value & 0xFF); }
         }
 
-        public byte D
+        public int D
         {
-            get { return (byte)(de >> 8); }
-            set { de = (ushort)(de & 0x00FF | (value << 8)); }
+            get { return de >> 8; }
+            set { de = de & 0x00FF | ((value & 0xFF) << 8); }
         }
 
-        public byte E
+        public int E
         {
-            get { return (byte)de; }
-            set { de = (ushort)(de & 0xFF00 | value); }
+            get { return de & 0xFF; }
+            set { de = de & 0xFF00 | (value & 0xFF); }
         }
 
-        public byte H
+        public int H
         {
-            get { return (byte)(hl >> 8); }
-            set { hl = (ushort)(hl & 0x00FF | (value << 8)); }
+            get { return hl >> 8; }
+            set { hl = hl & 0x00FF | ((value & 0xFF) << 8); }
         }
 
-        public byte L
+        public int L
         {
-            get { return (byte)hl; }
-            set { hl = (ushort)(hl & 0xFF00 | value); }
+            get { return hl & 0xFF; }
+            set { hl = hl & 0xFF00 | (value & 0xFF); }
         }
 
-        public ushort AF
+        public int AF
         {
-            get { return (ushort)((int)a << 8 | (int)F); }
-            set { a = (byte)(value >> 8); F = (byte)(value & 0x00FF); }
+            get { return a << 8 | (int)f; }
+            set { a = (value >> 8) & 0xFF; f = (Flags)(value & 0x00FF); }
         }
 
-        public ushort IX
+        public int IX
         {
             get { return ix; }
-            set { ix = value; }
+            set { ix = value & 0xFFFF; }
         }
 
-        public ushort IY
+        public int IY
         {
             get { return iy; }
-            set { iy = value; }
+            set { iy = value & 0xFFFF; }
         }
 
-        public byte IXH
+        public int IXH
         {
-            get { return (byte)(ix >> 8); }
-            set { ix = (ushort)(ix & 0x00FF | (value << 8)); }
+            get { return ix >> 8; }
+            set { ix = ix & 0x00FF | ((value & 0xFF) << 8); }
         }
 
-        public byte IXL
+        public int IXL
         {
-            get { return (byte)ix; }
-            set { ix = (ushort)(ix & 0xFF00 | value); }
+            get { return ix & 0xFF; }
+            set { ix = ix & 0xFF00 | (value & 0xFF); }
         }
 
-        public byte IYH
+        public int IYH
         {
-            get { return (byte)(iy >> 8); }
-            set { iy = (ushort)(iy & 0x00FF | (value << 8)); }
+            get { return iy >> 8; }
+            set { iy = iy & 0x00FF | ((value & 0xFF) << 8); }
         }
 
-        public byte IYL
+        public int IYL
         {
-            get { return (byte)iy; }
-            set { iy = (ushort)(iy & 0xFF00 | value); }
+            get { return iy & 0xFF; }
+            set { iy = iy & 0xFF00 | (value & 0xFF); }
         }
 
-        public ushort SP
+        public int SP
         {
             get { return sp; }
-            set { sp = value; }
+            set { sp = value & 0xFFFF; }
         }
 
         /// <summary>
@@ -345,7 +311,7 @@ namespace Z80Core
         /// <summary>
         /// Interrupt Control Vector Register
         /// </summary>
-        public byte I
+        public int I
         {
             get { return i; }
             set { i = value; }
@@ -354,7 +320,7 @@ namespace Z80Core
         /// <summary>
         /// Memory Refresh Register
         /// </summary>
-        public byte R
+        public int R
         {
             get { return r; }
             set { r = value; }
@@ -436,10 +402,10 @@ namespace Z80Core
                 z80regs.r = r;
 
                 z80regs.a = a;
+                z80regs.f = f;
                 z80regs.bc = bc;
                 z80regs.de = de;
                 z80regs.hl = hl;
-                z80regs.AF = AF;
 
                 z80regs.af_ = af_;
                 z80regs.bc_ = bc_;
@@ -448,5 +414,123 @@ namespace Z80Core
 
             }
         }
+
+
+        // Z80 Registers Old
+
+        public byte _A
+        {
+            get { return (byte)a; }
+            set { a = value; }
+        }
+
+        public short _BC
+        {
+            get { return (short)bc; }
+            set { bc = value; }
+        }
+
+        public short _DE
+        {
+            get { return (short)de; }
+            set { de = value; }
+        }
+
+        public short _HL
+        {
+            get { return (short)hl; }
+            set { hl = value; }
+        }
+
+        public byte _B
+        {
+            get { return (byte)(bc >> 8); }
+            set { bc = bc & 0x00FF | (value << 8); }
+        }
+
+        public byte _C
+        {
+            get { return (byte)(bc & 0xFF); }
+            set { bc = bc & 0xFF00 | (value & 0xFF); }
+        }
+
+        public byte _D
+        {
+            get { return (byte)(de >> 8); }
+            set { de = de & 0x00FF | ((value & 0xFF) << 8); }
+        }
+
+        public byte _E
+        {
+            get { return (byte)(de & 0xFF); }
+            set { de = de & 0xFF00 | (value & 0xFF); }
+        }
+
+        public byte _H
+        {
+            get { return (byte)(hl >> 8); }
+            set { hl = hl & 0x00FF | ((value & 0xFF) << 8); }
+        }
+
+        public byte _L
+        {
+            get { return (byte)(hl & 0xFF); }
+            set { hl = hl & 0xFF00 | (value & 0xFF); }
+        }
+
+        public short _AF
+        {
+            get { return (short)(a << 8 | (int)f); }
+            set { a = (value >> 8) & 0xFF; f = (Flags)(value & 0x00FF); }
+        }
+
+        public short _IX
+        {
+            get { return (short)ix; }
+            set { ix = value; }
+        }
+
+        public short _IY
+        {
+            get { return (short)iy; }
+            set { iy = value; }
+        }
+
+        public byte _IXH
+        {
+            get { return (byte)(ix >> 8); }
+            set { ix = ix & 0x00FF | ((value & 0xFF) << 8); }
+        }
+
+        public byte _IXL
+        {
+            get { return (byte)(ix & 0xFF); }
+            set { ix = ix & 0xFF00 | (value & 0xFF); }
+        }
+
+        public byte _IYH
+        {
+            get { return (byte)(iy >> 8); }
+            set { iy = iy & 0x00FF | ((value & 0xFF) << 8); }
+        }
+
+        public byte _IYL
+        {
+            get { return (byte)(iy & 0xFF); }
+            set { iy = iy & 0xFF00 | (value & 0xFF); }
+        }
+
+        public short _SP
+        {
+            get { return (short)sp; }
+            set { sp = value; }
+        }
+
+        public short _PC
+        {
+            get { return (short)pc; }
+            set { pc = value; }
+        }
+
     }
 }

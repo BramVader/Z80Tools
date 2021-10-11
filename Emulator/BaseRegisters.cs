@@ -1,21 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Diagnostics;
 
 namespace Emulator
 {
     public abstract class BaseRegisters
     {
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        protected ushort pc;
+        protected int pc;
 
-        public ushort PC
+        public int PC
         {
             get { return pc; }
-            set { pc = value; }
+            set { pc = value & 0xFFFF; }
         }
         
         public abstract void CloneTo(object regs);

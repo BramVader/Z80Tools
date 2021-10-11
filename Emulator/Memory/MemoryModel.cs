@@ -94,29 +94,14 @@ namespace Emulator
                 memoryChunks[m] = chunk;
             }
 
-            var par1 = Expression.Parameter(typeof(int), "adr");
-            var par2 = Expression.Parameter(typeof(byte), "value");
-            Expression readExpr =
-                Expression.ArrayAccess(
-                    Expression.Field(Expression.ArrayAccess(Expression.Constant(memoryChunks), Expression.RightShift(par1, Expression.Constant(chunkShift))), "currentRead"),
-                    Expression.And(par1, Expression.Constant(chunkSize - 1))
-                );
-            Expression writeExpr =
-                 Expression.Assign(
-                     Expression.ArrayAccess(
-                         Expression.Field(Expression.ArrayAccess(Expression.Constant(memoryChunks), Expression.RightShift(par1, Expression.Constant(chunkShift))), "currentWrite"),
-                         Expression.And(par1, Expression.Constant(chunkSize - 1))
-                     ),
-                     par2
-                );
-            //ReadMemory = Expression.Lambda<Func<int, byte>>(readExpr, par1).Compile();
-            //WriteMemory = Expression.Lambda<Action<int, byte>>(writeExpr, par1, par2).Compile();
             ReadMemory = (adr) =>
             {
+                adr &= 0xFFFF;
                 return memoryChunks[adr >> chunkShift].currentRead[adr & chunkSize - 1];
             };
             WriteMemory = (adr, value) =>
             {
+                adr &= 0xFFFF;
                 if (descriptors[memoryChunks[adr >> chunkShift].currentIndexWrite].Type == MemoryType.Rom)
                 {
                 }

@@ -95,7 +95,7 @@ namespace BdosCpm
             //emulator.OnInterruptAcknowledged += OnInterruptAcknowledged;
 
             var listFileReader = new ListFileReader();
-            using var sr = new StreamReader(new FileStream(@"C:\Development\Private\Z80Tools\Z80Validator\bin\Debug\net5.0\output.lst", FileMode.Open, FileAccess.Read, FileShare.Read));
+            using var sr = new StreamReader(new FileStream(@"..\..\..\..\Z80Validator\bin\Debug\net5.0\output.lst", FileMode.Open, FileAccess.Read, FileShare.Read));
             this.Symbols = listFileReader.Read(sr);
 
             this.console = new Console();
@@ -107,7 +107,7 @@ namespace BdosCpm
 
         public override void Reset()
         {
-            using var br = new BinaryReader(new FileStream(@"C:\Development\Private\Z80Tools\Z80Validator\bin\Debug\net5.0\output.bin", FileMode.Open, FileAccess.Read, FileShare.Read));
+            using var br = new BinaryReader(new FileStream(@"..\..\..\..\Z80Validator\bin\Debug\net5.0\output.bin", FileMode.Open, FileAccess.Read, FileShare.Read));
             var bytes = new byte[0x10000];
             int numRead = br.Read(bytes, 0, bytes.Length);
             Array.Resize(ref bytes, numRead);
