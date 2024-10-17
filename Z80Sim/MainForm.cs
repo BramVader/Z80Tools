@@ -94,7 +94,7 @@ namespace Z80TestConsole
 
         private (HardwareModel, Symbols) LoadBdosHardwareModel()
         {
-            var model = new BdosModel();
+            var model = new BdosModel(System.Console.Out);
             return (model, model.Symbols);
         }
 

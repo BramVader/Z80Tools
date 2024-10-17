@@ -152,9 +152,16 @@ namespace Emulator
             return registers as TReg;
         }
 
+        // Read 1 byte from memory
         public Func<int, byte> ReadMemory { get; set; }
+        
+        // Write 1 byte to memory
         public Action<int, byte> WriteMemory { get; set; }
+        
+        // Read 1 byte from I/O
         public Func<int, byte> ReadInput { get; set; }
+
+        // Write 1 byte to I/O
         public Action<int, byte> WriteOutput { get; set; }
     }
 }

@@ -12,9 +12,9 @@ namespace BdosCpm
         private class BdosBreakpoint : Breakpoint
         {
             private readonly MemoryModel memoryModel;
-            private readonly Console console;
+            private readonly TextWriter console;
 
-            public BdosBreakpoint(MemoryModel memoryModel, Console console)
+            public BdosBreakpoint(MemoryModel memoryModel, TextWriter console)
             {
                 this.memoryModel = memoryModel;
                 this.console = console;
@@ -66,11 +66,11 @@ namespace BdosCpm
             }
         }
 
-        private readonly Console console;
+        private readonly TextWriter console;
 
         public Disassembler.Symbols Symbols { get; init; }
 
-        public BdosModel()
+        public BdosModel(TextWriter console)
         {
             // Create memory model
             this.memoryModel = new MemoryModel(
@@ -98,11 +98,9 @@ namespace BdosCpm
             using var sr = new StreamReader(new FileStream(@"..\..\..\..\Z80Validator\bin\Debug\net5.0\output.lst", FileMode.Open, FileAccess.Read, FileShare.Read));
             this.Symbols = listFileReader.Read(sr);
 
-            this.console = new Console();
+            this.console = console;
 
             Reset();
-
-            console.Show();
         }
 
         public override void Reset()
@@ -120,7 +118,6 @@ namespace BdosCpm
             MemoryModel.Write(new byte[] { 0xC9 }, 0x0005, true);
 
             emulator.GetRegisters<Z80Registers>().PC = 0x100;
-            console.Reset();
         }
 
         protected override byte ReadInput(int address)

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Z80Core;
 
 namespace Z80TestConsole
@@ -263,14 +264,55 @@ namespace Z80TestConsole
             writer.WriteLine("</table></body>");
         }
 
+        private static async Task TestInstruction()
+        {
+            var ass = @"
+LD HL, 1234
+LD BC, 5678
+ADD HL,BC
+";
+            var asm = new Z80Assembler();
+            var coll = new Assembler.OutputCollector(Console.Out);
+            await asm.Assemble(coll, new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(ass))));
+            var emu = new Z80Emulator();
+
+            var memory = coll.Segments.First().Memory;
+            var registers = emu.GetRegisters<Z80Registers>();
+
+            emu.ReadMemory = adr => memory[adr];
+
+            for (int n = 0; n < 65535; n += 319)
+                for (int m = 0; m < 65535; m += 415)
+                {
+                    // Overwrite LD HL operand
+                    memory[1] = (byte)(n & 255);
+                    memory[1 + 1] = (byte)(n >> 8);
+                    // Overwrite LD BC operand
+                    memory[1 + 3] = (byte)(m & 255);
+                    memory[1 + 4] = (byte)(m >> 8);
+                    // Execute 3 instructions
+                    emu.Emulate();
+                    emu.Emulate();
+                    emu.Emulate();
+                    // Check the result
+                    if (registers.HL != ((n + m) & 65535))
+                    {
+                    }
+                    Console.WriteLine($"{n:X4} {m:X4} {registers.HL:X4} {registers.F}");
+                    emu.Reset();
+                }
+        }
+
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static async Task Main()
         {
             //CreateMatrix();
-            TestEmulator();
+            //TestEmulator();
+            await TestInstruction();
             //TestRom();
         }
     }

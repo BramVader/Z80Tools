@@ -5,6 +5,15 @@ using System.Diagnostics;
 namespace Z80Core
 {
     [Flags]
+    // Bit: 
+    // 0	C	CY	Carry flag (Bit 0)
+    // 1	N	N	Add/Subtract flag (Bit 1)
+    // 2	P	PV	Parity/Overflow flag (Bit 2, V=overflow)
+    // 3	X	X1	not used (Bit 3) - Contains Bit 3 of the result
+    // 4	H	HC	Half Carry flag (Bit 4)
+    // 5	Y	X2	Not used (Bit 5) - Contains Bit 5 of the result 
+    // 6	Z	Z	Zero flag (Bit 6)
+    // 7	S	S	Sign flag (Bit 7)
     public enum Flags : int
     {
         CY = 0x01,     // Carry flag (Bit 0)
@@ -112,6 +121,8 @@ namespace Z80Core
             save = de; de = de_; de_ = save;
             save = hl; hl = hl_; hl_ = save;
         }
+
+        public int Carry => (int)(f & Flags.CY);
 
         public bool CY
         {
@@ -414,123 +425,5 @@ namespace Z80Core
 
             }
         }
-
-
-        // Z80 Registers Old
-
-        public byte _A
-        {
-            get { return (byte)a; }
-            set { a = value; }
-        }
-
-        public short _BC
-        {
-            get { return (short)bc; }
-            set { bc = value; }
-        }
-
-        public short _DE
-        {
-            get { return (short)de; }
-            set { de = value; }
-        }
-
-        public short _HL
-        {
-            get { return (short)hl; }
-            set { hl = value; }
-        }
-
-        public byte _B
-        {
-            get { return (byte)(bc >> 8); }
-            set { bc = bc & 0x00FF | (value << 8); }
-        }
-
-        public byte _C
-        {
-            get { return (byte)(bc & 0xFF); }
-            set { bc = bc & 0xFF00 | (value & 0xFF); }
-        }
-
-        public byte _D
-        {
-            get { return (byte)(de >> 8); }
-            set { de = de & 0x00FF | ((value & 0xFF) << 8); }
-        }
-
-        public byte _E
-        {
-            get { return (byte)(de & 0xFF); }
-            set { de = de & 0xFF00 | (value & 0xFF); }
-        }
-
-        public byte _H
-        {
-            get { return (byte)(hl >> 8); }
-            set { hl = hl & 0x00FF | ((value & 0xFF) << 8); }
-        }
-
-        public byte _L
-        {
-            get { return (byte)(hl & 0xFF); }
-            set { hl = hl & 0xFF00 | (value & 0xFF); }
-        }
-
-        public short _AF
-        {
-            get { return (short)(a << 8 | (int)f); }
-            set { a = (value >> 8) & 0xFF; f = (Flags)(value & 0x00FF); }
-        }
-
-        public short _IX
-        {
-            get { return (short)ix; }
-            set { ix = value; }
-        }
-
-        public short _IY
-        {
-            get { return (short)iy; }
-            set { iy = value; }
-        }
-
-        public byte _IXH
-        {
-            get { return (byte)(ix >> 8); }
-            set { ix = ix & 0x00FF | ((value & 0xFF) << 8); }
-        }
-
-        public byte _IXL
-        {
-            get { return (byte)(ix & 0xFF); }
-            set { ix = ix & 0xFF00 | (value & 0xFF); }
-        }
-
-        public byte _IYH
-        {
-            get { return (byte)(iy >> 8); }
-            set { iy = iy & 0x00FF | ((value & 0xFF) << 8); }
-        }
-
-        public byte _IYL
-        {
-            get { return (byte)(iy & 0xFF); }
-            set { iy = iy & 0xFF00 | (value & 0xFF); }
-        }
-
-        public short _SP
-        {
-            get { return (short)sp; }
-            set { sp = value; }
-        }
-
-        public short _PC
-        {
-            get { return (short)pc; }
-            set { pc = value; }
-        }
-
     }
 }

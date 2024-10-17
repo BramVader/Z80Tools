@@ -88,6 +88,7 @@ namespace Z80Core
         private Expression readImmediateByte, readImmediateWord, readImmediateOffset;
         private MemberExpression regs;
         private MemberExpression flagCY, flagN, flagPV, flagHC, flagZ, flagS, flagX1, flagX2;
+        private MemberExpression carry;
         private MemberExpression iff1, iff2, im, flags;
         private MemberExpression regA, regB, regC, regD, regE, regH, regL;
         private MemberExpression regBC, regDE, regHL, regSP, regPC, regAF;
@@ -100,6 +101,11 @@ namespace Z80Core
         private Expression readIndirect8, readIndirect16;
         private Func<Expression, Expression> cInt;
         private Func<Expression, Expression> getParity;
+        private Func<Expression, Expression> signExtendByte;
+        private Func<Expression, Expression> signExtendWord;
+        private Func<object, Expression> c;
+        private Func<Expression, int, Expression> bit;
+        private Func<Expression, Expression> isZero;
         private bool[] parityTable;
         Func<Expression, Expression> writeIndirect8, writeIndirect16;
         Expression pop;
@@ -195,10 +201,7 @@ namespace Z80Core
             var indexed =
                 Expression.Add(
                     indexReg,
-                    Expression.Subtract(
-                        Expression.ExclusiveOr(dispPar, Expression.Constant(128)),
-                        Expression.Constant(128)
-                    )
+                    signExtendByte(dispPar)
                 );
             var temp1 = Expression.Variable(typeof(int));
             for (int n = 0; n < 256; n++)
@@ -229,15 +232,15 @@ namespace Z80Core
         public Z80EmulatorBuilder()
         {
             Init();
-            LoadInstructions();
-            StackInstructions();
-            ControlStructures();
-            Arithmetic();
-            RotateAndBit();
-            InputOutput();
-            LoopInstuctions();
-            Interrupts();
-            Misc();
+            BuildLoadInstructions();
+            BuildStackInstructions();
+            BuildControlStructures();
+            BuildArithmetic();
+            BuildRotateAndBit();
+            BuildInputOutput();
+            BuildLoopInstuctions();
+            BuildInterrupts();
+            BuildMisc();
 
             // Convert basic expressions to indexed expressions
             var converter = new IndexRegReplacer(this, regIX, regIXL, regIXH);
@@ -394,6 +397,10 @@ namespace Z80Core
             // Lambda parameter to instance of Emulator
             par = Expression.Parameter(type, "this");
 
+            c = constant => Expression.Constant(constant, constant.GetType());
+            bit = (par, bitNr) => Expression.Equal(Expression.And(par, c(1 << bitNr)), c(1 << bitNr));
+            isZero = par => Expression.Equal(Expression.And(par, c(0xFF)), c(0));
+
             // Init 'microCode' array
             microCode = new Action<Z80Emulator>[256];
             microExpr = new Expression[256];
@@ -443,6 +450,8 @@ namespace Z80Core
             flagX2 = GetMember<Z80Registers>(regs, p => p.X2);
             flags = GetMember<Z80Registers>(regs, p => p.F);
 
+            carry = GetMember<Z80Registers>(regs, p => p.Carry);
+
             // 8-bit registers
             regB = GetMember<Z80Registers>(regs, p => p.B);
             regC = GetMember<Z80Registers>(regs, p => p.C);
@@ -474,7 +483,7 @@ namespace Z80Core
             iff2 = GetMember<Z80Registers>(regs, p => p.Iff2);
             im = GetMember<Z80Registers>(regs, p => p.IM);
 
-            takeStatesLow = Expression.Assign(GetMember<Z80Registers>(regs, p => p.TakeStatesLow), Expression.Constant(true));
+            takeStatesLow = Expression.Assign(GetMember<Z80Registers>(regs, p => p.TakeStatesLow), c(true));
 
             // Read a byte from I/O
             readInput = adr => Expression.Convert(Expression.Invoke(readInputProp, adr), typeof(int));
@@ -489,18 +498,15 @@ namespace Z80Core
                     readImmediateByte,
                     Expression.LeftShift(
                         readImmediateByte,
-                        Expression.Constant(8)
+                        c(8)
                     )
                 );
 
+            signExtendByte = p => Expression.Subtract(Expression.ExclusiveOr(p, c(0x80)), c(0x80));
+            signExtendWord = p => Expression.Subtract(Expression.ExclusiveOr(p, c(0x8000)), c(0x8000));
+
             // Reads a signed byte and expands it to an int representation, e.g. 0000 00F9 becomes FFFF FFF9
-            readImmediateOffset = Expression.Subtract(
-                Expression.ExclusiveOr(
-                    readImmediateByte,
-                    Expression.Constant(128)
-                 ),
-                Expression.Constant(128)
-            );
+            readImmediateOffset = signExtendByte(readImmediateByte);
 
             // Read 8-bit data, referenced by 16-bit address operand
             readIndirect8 = readByte(readImmediateWord);
@@ -514,7 +520,7 @@ namespace Z80Core
                     readByte(Expression.PostIncrementAssign(target)),
                     Expression.LeftShift(
                         readByte(target),
-                        Expression.Constant(8)
+                        c(8)
                     )
                 )
             );
@@ -530,7 +536,7 @@ namespace Z80Core
                 new[] { target },
                 Expression.Assign(target, readImmediateWord),
                 writeByte(Expression.PostIncrementAssign(target), p),
-                writeByte(target, Expression.RightShift(p, Expression.Constant(8)))
+                writeByte(target, Expression.RightShift(p, c(8)))
             );
 
             readReg8 = new Expression[] {
@@ -565,9 +571,9 @@ namespace Z80Core
 
             // Stack expressions
             // - PUSH
-            push = (p) => Expression.Block(
-                writeByte(Expression.PreDecrementAssign(regSP), Expression.RightShift(p, Expression.Constant(8))),
-                writeByte(Expression.PreDecrementAssign(regSP), Expression.And(p, Expression.Constant(0xFF)))
+            push = p => Expression.Block(
+                writeByte(Expression.PreDecrementAssign(regSP), Expression.RightShift(p, c(8))),
+                writeByte(Expression.PreDecrementAssign(regSP), Expression.And(p, c(0xFF)))
             );
 
             // - POP
@@ -575,7 +581,7 @@ namespace Z80Core
                 readByte(Expression.PostIncrementAssign(regSP)),
                 Expression.LeftShift(
                     readByte(Expression.PostIncrementAssign(regSP)),
-                    Expression.Constant(8)
+                    c(8)
                 )
             );
 
@@ -587,12 +593,12 @@ namespace Z80Core
             }
 
             getParity = (p) =>
-                Expression.ArrayAccess(Expression.Field(null, typeof(Z80Emulator).GetField("parityTable", BindingFlags.NonPublic | BindingFlags.Static)), Expression.And(p, Expression.Constant(0xFF)));
+                Expression.ArrayAccess(Expression.Field(null, typeof(Z80Emulator).GetField("parityTable", BindingFlags.NonPublic | BindingFlags.Static)), Expression.And(p, c(0xFF)));
 
             InitTiming();
         }
 
-        private void LoadInstructions()
+        private void BuildLoadInstructions()
         {
             // LD <reg8>, <reg8> instructions
             for (int rIn = 0; rIn < 8; rIn++)
@@ -663,13 +669,13 @@ namespace Z80Core
                 new[] { temp1 },
                 Expression.Assign(regA, regI),
                 Expression.Assign(temp1, regI),
-                Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                Expression.Assign(flagHC, Expression.Constant(false)),
+                Expression.Assign(flagS, bit(temp1, 7)),
+                Expression.Assign(flagX1, bit(temp1, 3)),
+                Expression.Assign(flagX2, bit(temp1, 5)),
+                Expression.Assign(flagZ, isZero(temp1)),
+                Expression.Assign(flagHC, c(false)),
                 Expression.Assign(flagPV, iff2),
-                Expression.Assign(flagN, Expression.Constant(false))
+                Expression.Assign(flagN, c(false))
             );
 
             // LD A, R
@@ -677,18 +683,18 @@ namespace Z80Core
                 new[] { temp1 },
                 Expression.Assign(regR, regA),
                 Expression.Assign(temp1, regR),
-                Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                Expression.Assign(flagHC, Expression.Constant(false)),
+                Expression.Assign(flagS, bit(temp1, 7)),
+                Expression.Assign(flagX1, bit(temp1, 3)),
+                Expression.Assign(flagX2, bit(temp1, 5)),
+                Expression.Assign(flagZ, isZero(temp1)),
+                Expression.Assign(flagHC, c(false)),
                 Expression.Assign(flagPV, iff2),
-                Expression.Assign(flagN, Expression.Constant(false))
+                Expression.Assign(flagN, c(false))
             );
 
         }
 
-        private void StackInstructions()
+        private void BuildStackInstructions()
         {
             // PUSH
             for (int r = 0; r < 4; r++)
@@ -705,7 +711,7 @@ namespace Z80Core
             }
         }
 
-        private void ControlStructures()
+        private void BuildControlStructures()
         {
             var conditions = new Expression[]
                 {
@@ -823,7 +829,7 @@ namespace Z80Core
                 new[] { rel },
                 Expression.Assign(rel, readImmediateOffset),
                 Expression.Assign(regB, Expression.Decrement(regB)),
-                Expression.IfThenElse(Expression.NotEqual(regB, Expression.Constant(0)),
+                Expression.IfThenElse(Expression.NotEqual(regB, c(0)),
                     Expression.Assign(
                         regPC,
                         Expression.Add(regPC, rel)
@@ -833,12 +839,12 @@ namespace Z80Core
             );
         }
 
-        private void Arithmetic()
+        private void BuildArithmetic()
         {
-            var temp1 = Expression.Variable(typeof(int));
-            var temp2 = Expression.Variable(typeof(int));
-            var temp3 = Expression.Variable(typeof(int));
-            var temp4 = Expression.Variable(typeof(int));
+            var temp1 = Expression.Variable(typeof(int), "temp1");
+            var temp2 = Expression.Variable(typeof(int), "temp2");
+            var temp3 = Expression.Variable(typeof(int), "temp3");
+            var temp4 = Expression.Variable(typeof(int), "temp4");
 
             // INC/DEC <reg8>
             for (int incDec = 0; incDec < 2; incDec++)
@@ -852,12 +858,12 @@ namespace Z80Core
                             : Expression.Decrement(readReg8[reg])
                         ),
                         writeReg8[reg](temp1),
-                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                        Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, Expression.Constant(0x0F)), Expression.Constant(0x00))),
-                        Expression.Assign(flagPV, Expression.Equal(temp1, Expression.Constant(0x80))),
+                        Expression.Assign(flagS, bit(temp1, 7)),
+                        Expression.Assign(flagX1, bit(temp1, 3)),
+                        Expression.Assign(flagX2, bit(temp1, 5)),
+                        Expression.Assign(flagZ, isZero(temp1)),
+                        Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, c(0x0F)), c(0x00))),
+                        Expression.Assign(flagPV, Expression.Equal(temp1, c(0x80))),
                         Expression.Assign(flagN, Expression.Constant(incDec == 1))
                     );
                 }
@@ -876,13 +882,13 @@ namespace Z80Core
                             : Expression.Decrement(readByte(temp4))
                         ),
                         writeByte(temp4, temp1),
-                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                        Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, Expression.Constant(0x0F)), Expression.Constant(0x00))),
-                        Expression.Assign(flagPV, Expression.Equal(temp1, Expression.Constant(0x80))),
-                        Expression.Assign(flagN, Expression.Constant(incDec == 1))
+                        Expression.Assign(flagS, bit(temp1, 7)),
+                        Expression.Assign(flagX1, bit(temp1, 3)),
+                        Expression.Assign(flagX2, bit(temp1, 5)),
+                        Expression.Assign(flagZ, isZero(temp1)),
+                        Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, c(0x0F)), c(0x00))),
+                        Expression.Assign(flagPV, Expression.Equal(temp1, c(0x80))),
+                        Expression.Assign(flagN, c(incDec == 1))
                     );
                     if (reg == 0)
                         microExprDD[0x34 + incDec] = block;
@@ -917,28 +923,28 @@ namespace Z80Core
                     Expression.Assign(temp2, reg < 16 ? readReg8[reg % 8] : readImmediateByte),
                     Expression.Assign(temp3, reg < 8 || reg == 16 ? (Expression)Expression.Add(temp1, temp2) : (Expression)Expression.Condition(flagCY, Expression.Increment(Expression.Add(temp1, temp2)), Expression.Add(temp1, temp2))),
                     Expression.Assign(regA, temp3),
-                    Expression.Assign(flagCY, Expression.GreaterThan(temp3, Expression.Constant(0xFF))),
+                    Expression.Assign(flagCY, Expression.GreaterThan(temp3, c(0xFF))),
                     Expression.Assign(flagHC, Expression.NotEqual(
                         Expression.Add(
-                            Expression.And(temp1, Expression.Constant(0x10)),
-                            Expression.And(temp2, Expression.Constant(0x10))
+                            Expression.And(temp1, c(0x10)),
+                            Expression.And(temp2, c(0x10))
                         ),
-                        Expression.And(temp3, Expression.Constant(0x10))
+                        Expression.And(temp3, c(0x10))
                     )),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    Expression.Assign(flagX1, bit(temp3, 3)),
+                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagZ, isZero(temp3)),
                     Expression.Assign(flagPV, Expression.AndAlso(
                         Expression.Equal(
-                            Expression.And(temp1, Expression.Constant(0x80)),
-                            Expression.And(temp2, Expression.Constant(0x80))
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp2, c(0x80))
                         ),
                         Expression.NotEqual(
-                            Expression.And(temp1, Expression.Constant(0x80)),
-                            Expression.And(temp3, Expression.Constant(0x80))
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp3, c(0x80))
                         )
-                    )), Expression.Assign(flagN, Expression.Constant(false))
+                    )), Expression.Assign(flagN, c(false))
                 );
             }
 
@@ -953,29 +959,29 @@ namespace Z80Core
                     Expression.Assign(temp2, reg < 16 ? readReg8[reg % 8] : readImmediateByte),
                     Expression.Assign(temp3, reg < 8 || reg == 16 ? (Expression)Expression.Subtract(temp1, temp2) : (Expression)Expression.Condition(flagCY, Expression.Decrement(Expression.Subtract(temp1, temp2)), Expression.Subtract(temp1, temp2))),
                     Expression.Assign(regA, temp3),
-                    Expression.Assign(flagCY, Expression.LessThan(temp3, Expression.Constant(0x00))),
+                    Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
                     Expression.Assign(flagHC, Expression.NotEqual(
                         Expression.Subtract(
-                            Expression.And(temp1, Expression.Constant(0x10)),
-                            Expression.And(temp2, Expression.Constant(0x10))
+                            Expression.And(temp1, c(0x10)),
+                            Expression.And(temp2, c(0x10))
                         ),
-                        Expression.And(temp3, Expression.Constant(0x10))
+                        Expression.And(temp3, c(0x10))
                     )),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    Expression.Assign(flagX1, bit(temp3, 3)),
+                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagZ, isZero(temp3)),
                     Expression.Assign(flagPV, Expression.AndAlso(
                         Expression.NotEqual(
-                            Expression.And(temp1, Expression.Constant(0x80)),
-                            Expression.And(temp2, Expression.Constant(0x80))
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp2, c(0x80))
                         ),
                         Expression.NotEqual(
-                            Expression.And(temp1, Expression.Constant(0x80)),
-                            Expression.And(temp3, Expression.Constant(0x80))
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp3, c(0x80))
                         )
                     )),
-                    Expression.Assign(flagN, Expression.Constant(true))
+                    Expression.Assign(flagN, c(true))
                 );
             }
 
@@ -986,43 +992,57 @@ namespace Z80Core
                     {
                         Expression.Assign(temp1, regHL),
                         Expression.Assign(temp2, readReg16[reg % 4]),
-                        Expression.Assign(temp3, reg < 4 ? (Expression)Expression.Add(temp1, temp2) : (Expression)Expression.Condition(flagCY, Expression.Increment(Expression.Add(temp1, temp2)), Expression.Add(temp1, temp2))),
+                        Expression.Assign(temp3, reg < 4 ? Expression.Add(temp1, temp2) : Expression.Add(Expression.Add(temp1, temp2), carry)),
                         Expression.Assign(regHL, temp3),
-                        Expression.Assign(flagCY, Expression.GreaterThan(temp3, Expression.Constant(0xFFFF))),
-                        Expression.Assign(flagHC, Expression.NotEqual(
-                            Expression.Add(
-                                Expression.And(temp1, Expression.Constant(0x1000)),
-                                Expression.And(temp2, Expression.Constant(0x1000))
-                            ),
-                            Expression.And(temp3, Expression.Constant(0x1000))
+                        Expression.Assign(flagCY, Expression.GreaterThan(temp3, c(0xFFFF))),
+                        Expression.Assign(flagN, c(false)),
+                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, c(0x0800)), c(0x0800))),
+                        Expression.Assign(flagHC, Expression.GreaterThan(
+                            reg < 4 ?
+                                Expression.Add(
+                                    Expression.And(temp1, c(0xFFF)),
+                                    Expression.And(temp2, c(0xFFF))
+                                ) :
+                                Expression.Add(
+                                    Expression.Add(
+                                        Expression.And(temp1, c(0xFFF)),
+                                        Expression.And(temp2, c(0xFFF))
+                                    ),
+                                    carry
+                                ),
+                            c(0xFFF)
                         )),
-                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x8000)), Expression.Constant(0x8000))),
-                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x0800)), Expression.Constant(0x0800))),
-                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x2000)), Expression.Constant(0x2000))),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFFFF)), Expression.Constant(0x0000))),
-                        Expression.Assign(flagPV, Expression.AndAlso(
-                            Expression.Equal(
-                                Expression.And(temp1, Expression.Constant(0x8000)),
-                                Expression.And(temp2, Expression.Constant(0x8000))
-                            ),
-                            Expression.NotEqual(
-                                Expression.And(temp1, Expression.Constant(0x8000)),
-                                Expression.And(temp3, Expression.Constant(0x8000))
-                            )
-                        )),
-                        Expression.Assign(flagN, Expression.Constant(false))
+                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, c(0x2000)), c(0x2000)))
                     };
 
                 if (reg < 4)
+                {
                     microExpr[reg * 0x10 + 0x09] = Expression.Block(
                         new[] { temp1, temp2, temp3 },
                         code
                     );
+                }
                 else
+                {
+                    code.Add(
+                        Expression.Assign(flagPV, Expression.AndAlso(
+                            Expression.Equal(
+                                Expression.And(temp1, c(0x8000)),
+                                Expression.And(temp2, c(0x8000))
+                            ),
+                            Expression.NotEqual(
+                                Expression.And(temp1, c(0x8000)),
+                                Expression.And(temp3, c(0x8000))
+                            )
+                        ))
+                    );
+                    code.Add(Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, c(0xFFFF)), c(0x0000))));
+                    code.Add(Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, c(0x8000)), c(0x8000))));
                     microExprED[(reg % 4) * 0x10 + 0x4A] = Expression.Block(
                         new[] { temp1, temp2, temp3 },
                         code
                     );
+                }
             }
 
             // SBC HL, <reg16>
@@ -1032,31 +1052,34 @@ namespace Z80Core
                     {
                         Expression.Assign(temp1, regHL),
                         Expression.Assign(temp2, readReg16[reg]),
-                        Expression.Assign(temp3, (Expression)Expression.Condition(flagCY, Expression.Decrement(Expression.Subtract(temp1, temp2)), Expression.Subtract(temp1, temp2))),
+                        Expression.Assign(temp3, Expression.Subtract(Expression.Subtract(temp1, temp2), carry)),
                         Expression.Assign(regHL, temp3),
-                        Expression.Assign(flagCY, Expression.LessThan(temp3, Expression.Constant(0x0000))),
-                        Expression.Assign(flagHC, Expression.NotEqual(
-                            Expression.Subtract(
-                                Expression.And(temp1, Expression.Constant(0x1000)),
-                                Expression.And(temp2, Expression.Constant(0x1000))
-                            ),
-                            Expression.And(temp3, Expression.Constant(0x1000))
-                        )),
-                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x8000)), Expression.Constant(0x8000))),
-                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x0800)), Expression.Constant(0x0800))),
-                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x2000)), Expression.Constant(0x2000))),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFFFF)), Expression.Constant(0x0000))),
+                        Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x0000))),
+                        Expression.Assign(flagN, c(true)),
                         Expression.Assign(flagPV, Expression.AndAlso(
                             Expression.NotEqual(
-                                Expression.And(temp1, Expression.Constant(0x8000)),
-                                Expression.And(temp2, Expression.Constant(0x8000))
+                                Expression.And(temp1, c(0x8000)),
+                                Expression.And(temp2, c(0x8000))
                             ),
                             Expression.NotEqual(
-                                Expression.And(temp1, Expression.Constant(0x8000)),
-                                Expression.And(temp3, Expression.Constant(0x8000))
+                                Expression.And(temp1, c(0x8000)),
+                                Expression.And(temp3, c(0x8000))
                             )
                         )),
-                        Expression.Assign(flagN, Expression.Constant(true))
+                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, c(0x0800)), c(0x0800))),
+                        Expression.Assign(flagHC, Expression.LessThan(
+                            Expression.Subtract(
+                                Expression.Subtract(
+                                    Expression.And(temp1, c(0xFFF)),
+                                    Expression.And(temp2, c(0xFFF))
+                                ),
+                                carry
+                            ),
+                            c(0x0000)
+                        )),
+                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, c(0x2000)), c(0x2000))),
+                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, c(0x8000)), c(0x8000))),
+                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, c(0xFFFF)), c(0x0000)))
                     };
 
                 microExprED[reg * 0x10 + 0x42] = Expression.Block(
@@ -1076,16 +1099,16 @@ namespace Z80Core
                     Expression.Assign(temp2, reg < 8 ? readReg8[reg] : readImmediateByte),
                     Expression.Assign(temp3, Expression.And(temp1, temp2)),
                     Expression.Assign(regA, temp3),
-                    Expression.Assign(flagCY, Expression.Constant(false)),
-                    Expression.Assign(flagHC, Expression.Constant(true)),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(temp3, Expression.Constant(0x00))),
+                    Expression.Assign(flagCY, c(false)),
+                    Expression.Assign(flagHC, c(true)),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    Expression.Assign(flagX1, bit(temp3, 3)),
+                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagZ, Expression.Equal(temp3, c(0x00))),
                     // Special case: Overflow can never occur in AND-operation
                     // PV is set when bit7 of both operands are equal and bit7 of result is different
-                    Expression.Assign(flagPV, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false))
+                    Expression.Assign(flagPV, c(false)),
+                    Expression.Assign(flagN, c(false))
                 );
             }
 
@@ -1100,16 +1123,16 @@ namespace Z80Core
                     Expression.Assign(temp2, reg < 8 ? readReg8[reg] : readImmediateByte),
                     Expression.Assign(temp3, Expression.Or(temp1, temp2)),
                     Expression.Assign(regA, temp3),
-                    Expression.Assign(flagCY, Expression.Constant(false)),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(temp3, Expression.Constant(0x00))),
+                    Expression.Assign(flagCY, c(false)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    Expression.Assign(flagX1, bit(temp3, 3)),
+                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagZ, Expression.Equal(temp3, c(0x00))),
                     // Special case: Overflow can never occur in OR-operation
                     // PV is set when bit7 of both operands are equal and bit7 of result is different
-                    Expression.Assign(flagPV, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false))
+                    Expression.Assign(flagPV, c(false)),
+                    Expression.Assign(flagN, c(false))
                 );
             }
 
@@ -1124,14 +1147,14 @@ namespace Z80Core
                     Expression.Assign(temp2, reg < 8 ? readReg8[reg] : readImmediateByte),
                     Expression.Assign(temp3, Expression.ExclusiveOr(temp1, temp2)),
                     Expression.Assign(regA, temp3),
-                    Expression.Assign(flagCY, Expression.Constant(false)),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(temp3, Expression.Constant(0x00))),
+                    Expression.Assign(flagCY, c(false)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    Expression.Assign(flagX1, bit(temp3, 3)),
+                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagZ, Expression.Equal(temp3, c(0x00))),
                     Expression.Assign(flagPV, getParity(temp3)),
-                    Expression.Assign(flagN, Expression.Constant(false))
+                    Expression.Assign(flagN, c(false))
                 );
             }
 
@@ -1145,37 +1168,37 @@ namespace Z80Core
                     Expression.Assign(temp1, regA),
                     Expression.Assign(temp2, reg < 8 ? readReg8[reg] : readImmediateByte),
                     Expression.Assign(temp3, (Expression)Expression.Subtract(temp1, temp2)),
-                    Expression.Assign(flagCY, Expression.LessThan(temp3, Expression.Constant(0x00))),
+                    Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
                     Expression.Assign(flagHC, Expression.NotEqual(
                         Expression.Subtract(
-                            Expression.And(temp1, Expression.Constant(0x10)),
-                            Expression.And(temp2, Expression.Constant(0x10))
+                            Expression.And(temp1, c(0x10)),
+                            Expression.And(temp2, c(0x10))
                         ),
-                        Expression.And(temp3, Expression.Constant(0x10))
+                        Expression.And(temp3, c(0x10))
                     )),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    Expression.Assign(flagX1, bit(temp3, 3)),
+                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagZ, isZero(temp3)),
                     Expression.Assign(flagPV, Expression.AndAlso(
                         Expression.NotEqual(
-                            Expression.And(temp1, Expression.Constant(0x80)),
-                            Expression.And(temp2, Expression.Constant(0x80))
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp2, c(0x80))
                         ),
                         Expression.NotEqual(
-                            Expression.And(temp1, Expression.Constant(0x80)),
-                            Expression.And(temp3, Expression.Constant(0x80))
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp3, c(0x80))
                         )
                     )),
-                    Expression.Assign(flagN, Expression.Constant(true))
+                    Expression.Assign(flagN, c(true))
                 );
             }
 
             // SCF
-            microExpr[0x37] = Expression.Assign(flagCY, Expression.Constant(true));
+            microExpr[0x37] = Expression.Assign(flagCY, c(true));
 
             // CCF
-            microExpr[0x3F] = Expression.Assign(flagCY, Expression.Constant(false));
+            microExpr[0x3F] = Expression.Assign(flagCY, c(false));
 
             // DAA
             // - If the A register is greater than 0x99, OR the Carry flag is SET, then
@@ -1206,18 +1229,18 @@ namespace Z80Core
             microExpr[0x27] = Expression.Block(
                 new[] { corrFactor, temp1, temp2 },
                 Expression.Assign(temp1, regA),
-                Expression.IfThenElse(Expression.OrElse(flagCY, Expression.GreaterThan(temp1, Expression.Constant(0x90))),
+                Expression.IfThenElse(Expression.OrElse(flagCY, Expression.GreaterThan(temp1, c(0x90))),
                     Expression.Block(
-                        Expression.Assign(corrFactor, Expression.Constant(0x60)),
-                        Expression.Assign(flagCY, Expression.Constant(true))
+                        Expression.Assign(corrFactor, c(0x60)),
+                        Expression.Assign(flagCY, c(true))
                     ),
                     Expression.Block(
-                        Expression.Assign(corrFactor, Expression.Constant(0x00)),
-                        Expression.Assign(flagCY, Expression.Constant(false))
+                        Expression.Assign(corrFactor, c(0x00)),
+                        Expression.Assign(flagCY, c(false))
                     )
                 ),
-                Expression.IfThen(Expression.OrElse(flagHC, Expression.GreaterThan(Expression.And(temp1, Expression.Constant(0x0F)), Expression.Constant(0x09))),
-                    Expression.AddAssign(corrFactor, Expression.Constant(0x06))
+                Expression.IfThen(Expression.OrElse(flagHC, Expression.GreaterThan(Expression.And(temp1, c(0x0F)), c(0x09))),
+                    Expression.AddAssign(corrFactor, c(0x06))
                 ),
                 Expression.Assign(temp2, Expression.Condition(flagN,
                         Expression.Subtract(temp1, corrFactor),
@@ -1229,24 +1252,24 @@ namespace Z80Core
                     Expression.Equal(
                         Expression.And(
                             Expression.ExclusiveOr(temp1, temp2),
-                            Expression.Constant(0x10)
+                            c(0x10)
                         ),
-                        Expression.Constant(0x10)
+                        c(0x10)
                     )
                 ),
                 Expression.Assign(flagPV,
                     Expression.Equal(
                         Expression.And(
                             Expression.ExclusiveOr(temp1, temp2),
-                            Expression.Constant(0x80)
+                            c(0x80)
                         ),
-                        Expression.Constant(0x80)
+                        c(0x80)
                     )
                 ),
-                Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00)))
+                Expression.Assign(flagS, bit(temp2, 7)),
+                Expression.Assign(flagX1, bit(temp2, 3)),
+                Expression.Assign(flagX2, bit(temp2, 5)),
+                Expression.Assign(flagZ, isZero(temp2))
             );
 
             // NEG
@@ -1257,7 +1280,7 @@ namespace Z80Core
             }
         }
 
-        private void RotateAndBit()
+        private void BuildRotateAndBit()
         {
             var temp1 = Expression.Variable(typeof(int), "temp1");
             var temp2 = Expression.Variable(typeof(int), "temp2");
@@ -1268,10 +1291,10 @@ namespace Z80Core
                 new[] { temp1 },
                 Expression.Assign(temp1, regA),
                 Expression.Assign(regA, Expression.Or(
-                    Expression.LeftShift(temp1, Expression.Constant(1)),
-                    Expression.RightShift(temp1, Expression.Constant(7))
+                    Expression.LeftShift(temp1, c(1)),
+                    Expression.RightShift(temp1, c(7))
                 )),
-                Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80)))
+                Expression.Assign(flagCY, bit(temp1, 7))
             );
 
             // RRCA
@@ -1279,12 +1302,12 @@ namespace Z80Core
                 new[] { temp1 },
                 Expression.Assign(temp1, regA),
                 Expression.Assign(regA, Expression.Or(
-                    Expression.RightShift(temp1, Expression.Constant(1)),
-                    Expression.LeftShift(temp1, Expression.Constant(7))
+                    Expression.RightShift(temp1, c(1)),
+                    Expression.LeftShift(temp1, c(7))
                 )),
-                Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x01)), Expression.Constant(0x01))),
-                Expression.Assign(flagHC, Expression.Constant(false)),
-                Expression.Assign(flagN, Expression.Constant(false))
+                Expression.Assign(flagCY, bit(temp1, 0)),
+                Expression.Assign(flagHC, c(false)),
+                Expression.Assign(flagN, c(false))
             );
 
             // RLA
@@ -1294,13 +1317,13 @@ namespace Z80Core
                 Expression.Assign(temp2, Expression.Condition(
                     flagCY,
                     Expression.Or(
-                        Expression.LeftShift(temp1, Expression.Constant(1)),
-                        Expression.Constant(0x01)
+                        Expression.LeftShift(temp1, c(1)),
+                        c(0x01)
                     ),
-                    Expression.LeftShift(temp1, Expression.Constant(1))
+                    Expression.LeftShift(temp1, c(1))
                 )),
                 Expression.Assign(regA, temp2),
-                Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80)))
+                Expression.Assign(flagCY, bit(temp1, 7))
             );
 
             // RRA
@@ -1310,13 +1333,13 @@ namespace Z80Core
                 Expression.Assign(temp2, Expression.Condition(
                     flagCY,
                     Expression.Or(
-                        Expression.RightShift(temp1, Expression.Constant(1)),
-                        Expression.Constant(0x80)
+                        Expression.RightShift(temp1, c(1)),
+                        c(0x80)
                     ),
-                    Expression.RightShift(temp1, Expression.Constant(1))
+                    Expression.RightShift(temp1, c(1))
                 )),
                 Expression.Assign(regA, temp2),
-                Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x01)), Expression.Constant(0x01)))
+                Expression.Assign(flagCY, bit(temp1, 0))
             );
 
             // RLC <reg8>
@@ -1327,18 +1350,18 @@ namespace Z80Core
                     Expression.Assign(temp1, readReg8[reg]),
                     Expression.Assign(temp2,
                         Expression.Or(
-                            Expression.LeftShift(temp1, Expression.Constant(1)),
-                            Expression.RightShift(temp1, Expression.Constant(7))
+                            Expression.LeftShift(temp1, c(1)),
+                            Expression.RightShift(temp1, c(7))
                         )
                     ),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
+                    Expression.Assign(flagCY, bit(temp1, 7)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
                     Expression.Assign(flagPV, getParity(temp2))
                 );
             }
@@ -1351,18 +1374,18 @@ namespace Z80Core
                     Expression.Assign(temp1, readReg8[reg]),
                     Expression.Assign(temp2,
                         Expression.Or(
-                            Expression.RightShift(temp1, Expression.Constant(1)),
-                            Expression.LeftShift(temp1, Expression.Constant(7))
+                            Expression.RightShift(temp1, c(1)),
+                            Expression.LeftShift(temp1, c(7))
                         )
                     ),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x01)), Expression.Constant(0x01))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
+                    Expression.Assign(flagCY, bit(temp1, 0)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
                     Expression.Assign(flagPV, getParity(temp2))
                 );
             }
@@ -1377,20 +1400,20 @@ namespace Z80Core
                         Expression.Condition(
                             flagCY,
                             Expression.Or(
-                                Expression.LeftShift(temp1, Expression.Constant(1)),
-                                Expression.Constant(0x01)
+                                Expression.LeftShift(temp1, c(1)),
+                                c(0x01)
                             ),
-                            Expression.LeftShift(temp1, Expression.Constant(1))
+                            Expression.LeftShift(temp1, c(1))
                         )
                     ),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
+                    Expression.Assign(flagCY, bit(temp1, 7)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
                     Expression.Assign(flagPV, getParity(temp2))
                 );
             }
@@ -1405,21 +1428,21 @@ namespace Z80Core
                         Expression.Condition(
                             flagCY,
                             Expression.Or(
-                                Expression.RightShift(temp1, Expression.Constant(1)),
-                                Expression.Constant(0x80)
+                                Expression.RightShift(temp1, c(1)),
+                                c(0x80)
                             ),
-                            Expression.RightShift(temp1, Expression.Constant(1))
+                            Expression.RightShift(temp1, c(1))
                         )
                     ),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x01)), Expression.Constant(0x01))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
-                    Expression.Assign(flagPV, getParity(Expression.And(temp2, Expression.Constant(0xFF))))
+                    Expression.Assign(flagCY, bit(temp1, 0)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(Expression.And(temp2, c(0xFF))))
                 );
             }
 
@@ -1429,15 +1452,15 @@ namespace Z80Core
                 microExprCB[0x20 + reg] = Expression.Block(
                     new[] { temp1, temp2 },
                     Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2, Expression.LeftShift(temp1, Expression.Constant(1))),
+                    Expression.Assign(temp2, Expression.LeftShift(temp1, c(1))),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
+                    Expression.Assign(flagCY, bit(temp1, 7)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
                     Expression.Assign(flagPV, getParity(temp2))
                 );
             }
@@ -1449,17 +1472,17 @@ namespace Z80Core
                     new[] { temp1, temp2 },
                     Expression.Assign(temp1, readReg8[reg]),
                     Expression.Assign(temp2, Expression.Or(
-                        Expression.RightShift(temp1, Expression.Constant(1)),
-                        Expression.And(temp1, Expression.Constant(0x80))
+                        Expression.RightShift(temp1, c(1)),
+                        Expression.And(temp1, c(0x80))
                     )),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x01)), Expression.Constant(0x01))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
+                    Expression.Assign(flagCY, bit(temp1, 0)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
                     Expression.Assign(flagPV, getParity(temp2))
                 );
             }
@@ -1471,17 +1494,17 @@ namespace Z80Core
                     new[] { temp1, temp2 },
                     Expression.Assign(temp1, readReg8[reg]),
                     Expression.Assign(temp2, Expression.Or(
-                        Expression.LeftShift(temp1, Expression.Constant(1)),
-                        Expression.Constant(0x01)
+                        Expression.LeftShift(temp1, c(1)),
+                        c(0x01)
                     )),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
+                    Expression.Assign(flagCY, bit(temp1, 7)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
                     Expression.Assign(flagPV, getParity(temp2))
                 );
             }
@@ -1492,15 +1515,15 @@ namespace Z80Core
                 microExprCB[0x38 + reg] = Expression.Block(
                     new[] { temp1, temp2 },
                     Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2, Expression.RightShift(temp1, Expression.Constant(1))),
+                    Expression.Assign(temp2, Expression.RightShift(temp1, c(1))),
                     writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, Expression.Equal(Expression.And(temp1, Expression.Constant(0x01)), Expression.Constant(0x01))),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp2, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp2, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp2, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp2, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
-                    Expression.Assign(flagN, Expression.Constant(false)),
+                    Expression.Assign(flagCY, bit(temp1, 0)),
+                    Expression.Assign(flagS, bit(temp2, 7)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
+                    Expression.Assign(flagZ, isZero(temp2)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
                     Expression.Assign(flagPV, getParity(temp2))
                 );
             }
@@ -1511,21 +1534,21 @@ namespace Z80Core
                 Expression.Assign(temp1, regA),
                 Expression.Assign(temp2, Expression.Or(
                         readByte(regHL),
-                        Expression.LeftShift(temp1, Expression.Constant(8))
+                        Expression.LeftShift(temp1, c(8))
                     )
                 ),
                 Expression.Assign(temp2,
                     Expression.Or(
                         Expression.LeftShift(
                             temp2,
-                            Expression.Constant(4)
+                            c(4)
                         ),
                         Expression.RightShift(
                             Expression.And(
                                 temp2,
-                                Expression.Constant(0x0F00)
+                                c(0x0F00)
                             ),
-                            Expression.Constant(8)
+                            c(8)
                         )
                     )
                 ),
@@ -1534,24 +1557,24 @@ namespace Z80Core
                     Expression.Or(
                         Expression.And(
                             temp1,
-                            Expression.Constant(0xF0)
+                            c(0xF0)
                         ),
                         Expression.And(
                             Expression.RightShift(
                                 temp2,
-                                Expression.Constant(8)
+                                c(8)
                             ),
-                            Expression.Constant(0x0F)
+                            c(0x0F)
                         )
                     )
                 ),
                 Expression.Assign(regA, temp3),
-                Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                Expression.Assign(flagHC, Expression.Constant(false)),
-                Expression.Assign(flagN, Expression.Constant(false)),
+                Expression.Assign(flagS, bit(temp3, 7)),
+                Expression.Assign(flagX1, bit(temp3, 3)),
+                Expression.Assign(flagX2, bit(temp3, 5)),
+                Expression.Assign(flagZ, isZero(temp3)),
+                Expression.Assign(flagHC, c(false)),
+                Expression.Assign(flagN, c(false)),
                 Expression.Assign(flagPV, getParity(temp3))
             );
 
@@ -1561,7 +1584,7 @@ namespace Z80Core
                 Expression.Assign(temp1, regA),
                 Expression.Assign(temp2, Expression.Or(
                         readByte(regHL),
-                        Expression.LeftShift(temp1, Expression.Constant(8))
+                        Expression.LeftShift(temp1, c(8))
                     )
                 ),
                 Expression.Assign(temp2,
@@ -1569,16 +1592,16 @@ namespace Z80Core
                         Expression.And(
                             Expression.RightShift(
                                 temp2,
-                                Expression.Constant(4)
+                                c(4)
                             ),
-                            Expression.Constant(0x00FF)
+                            c(0x00FF)
                         ),
                         Expression.LeftShift(
                             Expression.And(
                                 temp2,
-                                Expression.Constant(0x000F)
+                                c(0x000F)
                             ),
-                            Expression.Constant(8)
+                            c(8)
                         )
                     )
                 ),
@@ -1587,24 +1610,24 @@ namespace Z80Core
                     Expression.Or(
                         Expression.And(
                             temp1,
-                            Expression.Constant(0xF0)
+                            c(0xF0)
                         ),
                         Expression.And(
                             Expression.RightShift(
                                 temp2,
-                                Expression.Constant(8)
+                                c(8)
                             ),
-                            Expression.Constant(0x0F)
+                            c(0x0F)
                         )
                     )
                 ),
                 Expression.Assign(regA, temp3),
-                Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                Expression.Assign(flagHC, Expression.Constant(false)),
-                Expression.Assign(flagN, Expression.Constant(false)),
+                Expression.Assign(flagS, bit(temp3, 7)),
+                Expression.Assign(flagX1, bit(temp3, 3)),
+                Expression.Assign(flagX2, bit(temp3, 5)),
+                Expression.Assign(flagZ, isZero(temp3)),
+                Expression.Assign(flagHC, c(false)),
+                Expression.Assign(flagN, c(false)),
                 Expression.Assign(flagPV, getParity(temp3))
             );
 
@@ -1615,9 +1638,9 @@ namespace Z80Core
                     microExprCB[bit * 8 + reg + 0x40] = Expression.Block(
                         new[] { temp1 },
                         Expression.Assign(temp1, readReg8[reg]),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(1 << bit)), Expression.Constant(0x00))),
-                        Expression.Assign(flagHC, Expression.Constant(true)),
-                        Expression.Assign(flagN, Expression.Constant(false))
+                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(1 << bit)), c(0x00))),
+                        Expression.Assign(flagHC, c(true)),
+                        Expression.Assign(flagN, c(false))
                     );
                 }
 
@@ -1639,7 +1662,7 @@ namespace Z80Core
                 }
         }
 
-        private void LoopInstuctions()
+        private void BuildLoopInstuctions()
         {
             // LDI(R)
             // LDD(R)
@@ -1657,14 +1680,14 @@ namespace Z80Core
                             Expression.Decrement(regHL)
                         ),
                         Expression.Assign(regBC, Expression.Decrement(regBC)),
-                        Expression.Assign(flagHC, Expression.Constant(false)),
-                        Expression.Assign(flagN, Expression.Constant(false)),
-                        Expression.Assign(flagPV, Expression.NotEqual(regBC, Expression.Constant(0)))
+                        Expression.Assign(flagHC, c(false)),
+                        Expression.Assign(flagN, c(false)),
+                        Expression.Assign(flagPV, Expression.NotEqual(regBC, c(0)))
                     };
 
                 // the (R) part...
                 if (n >= 2)
-                    list.Add(Expression.IfThenElse(flagPV, Expression.Assign(regPC, Expression.Subtract(regPC, Expression.Constant(2))), takeStatesLow));
+                    list.Add(Expression.IfThenElse(flagPV, Expression.Assign(regPC, Expression.Subtract(regPC, c(2))), takeStatesLow));
 
                 microExprED[0xA0 + n * 8] = Expression.Block(
                     list
@@ -1690,24 +1713,24 @@ namespace Z80Core
                         Expression.Assign(regBC, Expression.Decrement(regBC)),
                         Expression.Assign(flagHC, Expression.NotEqual(
                             Expression.Subtract(
-                                Expression.And(temp1, Expression.Constant(0x10)),
-                                Expression.And(temp2, Expression.Constant(0x10))
+                                Expression.And(temp1, c(0x10)),
+                                Expression.And(temp2, c(0x10))
                             ),
-                            Expression.And(temp3, Expression.Constant(0x10))
+                            Expression.And(temp3, c(0x10))
                         )),
-                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                        Expression.Assign(flagPV, Expression.NotEqual(regBC, Expression.Constant(0))),
-                        Expression.Assign(flagN, Expression.Constant(true))
+                        Expression.Assign(flagS, bit(temp3, 7)),
+                        Expression.Assign(flagX1, bit(temp3, 3)),
+                        Expression.Assign(flagX2, bit(temp3, 5)),
+                        Expression.Assign(flagZ, isZero(temp3)),
+                        Expression.Assign(flagPV, Expression.NotEqual(regBC, c(0))),
+                        Expression.Assign(flagN, c(true))
                     };
 
                 // the (R) part...
                 if (n >= 2)
                     list.Add(Expression.IfThenElse(
-                        Expression.AndAlso(flagPV, Expression.NotEqual(temp3, Expression.Constant(0))),
-                        Expression.Assign(regPC, Expression.Subtract(regPC, Expression.Constant(2))),
+                        Expression.AndAlso(flagPV, Expression.NotEqual(temp3, c(0))),
+                        Expression.Assign(regPC, Expression.Subtract(regPC, c(2))),
                         takeStatesLow
                     ));
 
@@ -1734,22 +1757,22 @@ namespace Z80Core
                         Expression.Assign(temp2, Expression.Add(temp1, Expression.And((n & 1) == 0 ?
                             Expression.Increment(regC) :
                             Expression.Decrement(regC),
-                            Expression.Constant(0xFF)))),
-                        Expression.Assign(flagHC, Expression.GreaterThan(temp2, Expression.Constant(0xFF))),
-                        Expression.Assign(flagCY, Expression.GreaterThan(temp2, Expression.Constant(0xFF))),
-                        Expression.Assign(flagPV, getParity(Expression.ExclusiveOr(Expression.And(temp2, Expression.Constant(0x07)), regB))),
-                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                        Expression.Assign(flagN, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80)))
+                            c(0xFF)))),
+                        Expression.Assign(flagHC, Expression.GreaterThan(temp2, c(0xFF))),
+                        Expression.Assign(flagCY, Expression.GreaterThan(temp2, c(0xFF))),
+                        Expression.Assign(flagPV, getParity(Expression.ExclusiveOr(Expression.And(temp2, c(0x07)), regB))),
+                        Expression.Assign(flagS, bit(temp3, 7)),
+                        Expression.Assign(flagX1, bit(temp3, 3)),
+                        Expression.Assign(flagX2, bit(temp3, 5)),
+                        Expression.Assign(flagZ, isZero(temp3)),
+                        Expression.Assign(flagN, bit(temp1, 7))
                     };
 
                 // the (R) part...
                 if (n >= 2)
                     list.Add(Expression.IfThenElse(
-                        Expression.NotEqual(temp3, Expression.Constant(0)),
-                        Expression.Assign(regPC, Expression.Subtract(regPC, Expression.Constant(2))),
+                        Expression.NotEqual(temp3, c(0)),
+                        Expression.Assign(regPC, Expression.Subtract(regPC, c(2))),
                         takeStatesLow
                 ));
 
@@ -1774,21 +1797,21 @@ namespace Z80Core
                             Expression.Decrement(regHL)
                         ),
                         Expression.Assign(temp2, Expression.Add(temp1, regL)),
-                        Expression.Assign(flagHC, Expression.GreaterThan(temp2, Expression.Constant(0xFF))),
-                        Expression.Assign(flagCY, Expression.GreaterThan(temp2, Expression.Constant(0xFF))),
-                        Expression.Assign(flagPV, getParity(Expression.ExclusiveOr(Expression.And(temp2, Expression.Constant(0x07)), regB))),
-                        Expression.Assign(flagS, Expression.Equal(Expression.And(temp3, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                        Expression.Assign(flagX1, Expression.Equal(Expression.And(temp3, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                        Expression.Assign(flagX2, Expression.Equal(Expression.And(temp3, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp3, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                        Expression.Assign(flagN, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80)))
+                        Expression.Assign(flagHC, Expression.GreaterThan(temp2, c(0xFF))),
+                        Expression.Assign(flagCY, Expression.GreaterThan(temp2, c(0xFF))),
+                        Expression.Assign(flagPV, getParity(Expression.ExclusiveOr(Expression.And(temp2, c(0x07)), regB))),
+                        Expression.Assign(flagS, bit(temp3, 7)),
+                        Expression.Assign(flagX1, bit(temp3, 3)),
+                        Expression.Assign(flagX2, bit(temp3, 5)),
+                        Expression.Assign(flagZ, isZero(temp3)),
+                        Expression.Assign(flagN, bit(temp1, 7))
                     };
 
                 // the (R) part...
                 if (n >= 2)
                     list.Add(Expression.IfThenElse(
-                        Expression.NotEqual(temp3, Expression.Constant(0)),
-                        Expression.Assign(regPC, Expression.Subtract(regPC, Expression.Constant(2))),
+                        Expression.NotEqual(temp3, c(0)),
+                        Expression.Assign(regPC, Expression.Subtract(regPC, c(2))),
                         takeStatesLow
                     ));
 
@@ -1799,7 +1822,7 @@ namespace Z80Core
             }
         }
 
-        private void Misc()
+        private void BuildMisc()
         {
             var temp1 = Expression.Variable(typeof(int));
             var temp2 = Expression.Variable(typeof(int));
@@ -1808,36 +1831,36 @@ namespace Z80Core
 
             // CPL
             microExpr[0x2F] = Expression.Block(
-                Expression.Assign(regA, Expression.ExclusiveOr(regA, Expression.Constant(0xFF))),
-                Expression.Assign(flagHC, Expression.Constant(true)),
-                Expression.Assign(flagN, Expression.Constant(true))
+                Expression.Assign(regA, Expression.ExclusiveOr(regA, c(0xFF))),
+                Expression.Assign(flagHC, c(true)),
+                Expression.Assign(flagN, c(true))
             );
 
             // DI
             microExpr[0xF3] = Expression.Block(
-                Expression.Assign(iff1, Expression.Constant(false)),
-                Expression.Assign(iff2, Expression.Constant(false))
+                Expression.Assign(iff1, c(false)),
+                Expression.Assign(iff2, c(false))
             );
 
             // EI
             var maskInterruptsNextProp = GetMember<Z80Registers>(regs, p => p.MaskInterruptsNext);
             microExpr[0xFB] = Expression.Block(
-                Expression.Assign(iff1, Expression.Constant(true)),
-                Expression.Assign(iff2, Expression.Constant(true)),
-                Expression.Assign(maskInterruptsNextProp, Expression.Constant(true))  // Interrupts are masked after execution of EI
+                Expression.Assign(iff1, c(true)),
+                Expression.Assign(iff2, c(true)),
+                Expression.Assign(maskInterruptsNextProp, c(true))  // Interrupts are masked after execution of EI
             );
 
             // IM0
             microExprED[0x46] = microExprED[0x4E] = microExprED[0x66] = microExprED[0x6E] =
-                Expression.Assign(im, Expression.Constant(0));
+                Expression.Assign(im, c(0));
 
             // IM1
             microExprED[0x56] = microExprED[0x76] =
-                Expression.Assign(im, Expression.Constant(1));
+                Expression.Assign(im, c(1));
 
             // IM2
             microExprED[0x5E] = microExprED[0x7E] =
-                Expression.Assign(im, Expression.Constant(2));
+                Expression.Assign(im, c(2));
 
             // EXX
             Expression<Action<Z80Registers>> call = rg => rg.Exx();
@@ -1870,11 +1893,11 @@ namespace Z80Core
             // HALT
             microExpr[0x76] = Expression.Block(
                 Expression.Assign(regPC, Expression.Decrement(regPC)),
-                Expression.Assign(GetMember<Z80Registers>(regs, p => p.Halted), Expression.Constant(true))
+                Expression.Assign(GetMember<Z80Registers>(regs, p => p.Halted), c(true))
             );
         }
 
-        private void InputOutput()
+        private void BuildInputOutput()
         {
             // IN A, (n)
             microExpr[0xDB] = Expression.Assign(regA,
@@ -1883,7 +1906,7 @@ namespace Z80Core
                         readImmediateByte,
                         Expression.LeftShift(
                             regA,
-                            Expression.Constant(8)
+                            c(8)
                         )
                     )
                 )
@@ -1897,13 +1920,13 @@ namespace Z80Core
                     new[] { temp1 },
                     Expression.Assign(temp1, readInput(regBC)),
                     reg == 6 ? Expression.Assign(temp1, temp1) : Expression.Assign(readReg8[reg], temp1),
-                    Expression.Assign(flagS, Expression.Equal(Expression.And(temp1, Expression.Constant(0x80)), Expression.Constant(0x80))),
-                    Expression.Assign(flagX1, Expression.Equal(Expression.And(temp1, Expression.Constant(0x08)), Expression.Constant(0x08))),
-                    Expression.Assign(flagX2, Expression.Equal(Expression.And(temp1, Expression.Constant(0x20)), Expression.Constant(0x20))),
-                    Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(0xFF)), Expression.Constant(0x00))),
-                    Expression.Assign(flagHC, Expression.Constant(false)),
+                    Expression.Assign(flagS, bit(temp1, 7)),
+                    Expression.Assign(flagX1, bit(temp1, 3)),
+                    Expression.Assign(flagX2, bit(temp1, 5)),
+                    Expression.Assign(flagZ, isZero(temp1)),
+                    Expression.Assign(flagHC, c(false)),
                     Expression.Assign(flagPV, getParity(temp1)),
-                    Expression.Assign(flagN, Expression.Constant(false))
+                    Expression.Assign(flagN, c(false))
                 );
             }
 
@@ -1913,7 +1936,7 @@ namespace Z80Core
                     readImmediateByte,
                     Expression.LeftShift(
                         regA,
-                        Expression.Constant(8)
+                        c(8)
                     )
                 ),
                 regA
@@ -1929,7 +1952,7 @@ namespace Z80Core
             }
         }
 
-        private void Interrupts()
+        private void BuildInterrupts()
         {
             var dataOnBusPar = Expression.Parameter(typeof(byte), "dataOnBus");
             var timingProp = GetMember<Z80Registers>(regs, p => p.Timing);
@@ -1943,27 +1966,27 @@ namespace Z80Core
                     Expression.Assign(regR, Expression.Increment(regR)),
                     Expression.IfThen(haltedProp, Expression.Block(
                         Expression.Assign(regPC, Expression.Increment(regPC)),   // Bail out of HALT instruction
-                        Expression.Assign(haltedProp, Expression.Constant(false))
+                        Expression.Assign(haltedProp, c(false))
                     )),
-                    Expression.Assign(iff1, Expression.Constant(false)),
-                    Expression.Assign(iff2, Expression.Constant(false)),
-                    Expression.IfThenElse(Expression.Equal(im, Expression.Constant(0)),
+                    Expression.Assign(iff1, c(false)),
+                    Expression.Assign(iff2, c(false)),
+                    Expression.IfThenElse(Expression.Equal(im, c(0)),
                         Expression.Block(       // Interrupt modus 0 - read next opcode from databus
                             Expression.Assign(nextOpcodeProp, Expression.Convert(dataOnBusPar, typeof(int?))),
-                            Expression.Assign(statesNormalProp, Expression.Constant(13)),
-                            Expression.Assign(statesLowProp, Expression.Constant(13))
+                            Expression.Assign(statesNormalProp, c(13)),
+                            Expression.Assign(statesLowProp, c(13))
                         ),
-                        Expression.IfThenElse(Expression.Equal(im, Expression.Constant(1)),
+                        Expression.IfThenElse(Expression.Equal(im, c(1)),
                             Expression.Block(       // Interrupt modus 1 - next opcode is a RST 0x0038
-                                Expression.Assign(nextOpcodeProp, Expression.Convert(Expression.Constant(0xFF), typeof(int?))),   // RST 0x0038
-                                Expression.Assign(statesNormalProp, Expression.Constant(13)),
-                                Expression.Assign(statesLowProp, Expression.Constant(13))
+                                Expression.Assign(nextOpcodeProp, Expression.Convert(c(0xFF), typeof(int?))),   // RST 0x0038
+                                Expression.Assign(statesNormalProp, c(13)),
+                                Expression.Assign(statesLowProp, c(13))
                             ),
                             Expression.Block(       // Interrupt modus 2
                                 push(regPC),
-                                Expression.Assign(nextOpcodeProp, Expression.Convert(readByte(Expression.Or(Expression.LeftShift(regI, Expression.Constant(8)), cInt(dataOnBusPar))), typeof(int?))),
-                                Expression.Assign(statesNormalProp, Expression.Constant(19)),
-                                Expression.Assign(statesLowProp, Expression.Constant(19))
+                                Expression.Assign(nextOpcodeProp, Expression.Convert(readByte(Expression.Or(Expression.LeftShift(regI, c(8)), cInt(dataOnBusPar))), typeof(int?))),
+                                Expression.Assign(statesNormalProp, c(19)),
+                                Expression.Assign(statesLowProp, c(19))
                             )
                         )
                     )
@@ -1976,14 +1999,14 @@ namespace Z80Core
                     Expression.Assign(regR, Expression.Increment(regR)),
                     Expression.IfThen(haltedProp, Expression.Block(
                         Expression.Assign(regPC, Expression.Increment(regPC)),   // Bail out of HALT instruction
-                        Expression.Assign(haltedProp, Expression.Constant(false))
+                        Expression.Assign(haltedProp, c(false))
                     )),
                     Expression.Assign(iff2, iff1),
-                    Expression.Assign(iff1, Expression.Constant(false)),
+                    Expression.Assign(iff1, c(false)),
                     push(regPC),
-                    Expression.Assign(regPC, Expression.Constant(0x0066)),
-                    Expression.Assign(statesNormalProp, Expression.Constant(11)),
-                    Expression.Assign(statesLowProp, Expression.Constant(11))
+                    Expression.Assign(regPC, c(0x0066)),
+                    Expression.Assign(statesNormalProp, c(11)),
+                    Expression.Assign(statesLowProp, c(11))
                 );
             handleNmi = Expression.Lambda<Action<Z80Emulator, byte>>(handleNmiExpr, par, dataOnBusPar).Compile();
         }

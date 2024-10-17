@@ -118,7 +118,7 @@ namespace Assembler
             if (parts[1] != "")
             {
                 if (state.CurrentExpansion == null)
-                    throw new InvalidOperationException("Symbol expansion with '&' only allowed wihtin macro definition");
+                    throw new InvalidOperationException("Symbol expansion with '&' only allowed within macro definition");
                 var replacementName = state.CurrentExpansion.GetSubstitute(parts[1]);
                 symbol += replacementName ?? throw new InvalidOperationException($"Unknown local symbol in macro {state.CurrentExpansion.Macro.Name}");
             }
