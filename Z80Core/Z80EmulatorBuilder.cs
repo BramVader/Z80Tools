@@ -916,21 +916,28 @@ namespace Z80Core
             // ADD(C) A, n
             for (int reg = 0; reg < 18; reg++)
             {
+                // 0..7  -> 0x80..0x87: ADD A,s    (s: B, C, D, E, H, L, (HL), A)
+                // 0..15 -> 0x88..0x8F: ADC A,s    
+                // 16    -> 0xC6:       ADD A,n
+                // 17    -> 0xCE:       ADC A,n
                 var opcode = reg < 16 ? reg + 0x80 : (reg - 16) * 8 + 0xC6;
+                var withCarry = reg >= 8 && reg != 16;
                 microExpr[opcode] = Expression.Block(
                     new[] { temp1, temp2, temp3 },
                     Expression.Assign(temp1, regA),
                     Expression.Assign(temp2, reg < 16 ? readReg8[reg % 8] : readImmediateByte),
-                    Expression.Assign(temp3, reg < 8 || reg == 16 ? (Expression)Expression.Add(temp1, temp2) : (Expression)Expression.Condition(flagCY, Expression.Increment(Expression.Add(temp1, temp2)), Expression.Add(temp1, temp2))),
+                    Expression.Assign(temp3, withCarry 
+                        ? Expression.Add(Expression.Add(temp1, temp2), carry) 
+                        : (Expression)Expression.Add(temp1, temp2)
+                    ),
                     Expression.Assign(regA, temp3),
-                    Expression.Assign(flagCY, Expression.GreaterThan(temp3, c(0xFF))),
-                    Expression.Assign(flagHC, Expression.NotEqual(
-                        Expression.Add(
-                            Expression.And(temp1, c(0x10)),
-                            Expression.And(temp2, c(0x10))
-                        ),
-                        Expression.And(temp3, c(0x10))
+                    Expression.Assign(flagHC, bit(
+                        withCarry 
+                        ? Expression.Add(Expression.Add(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))), carry) 
+                        :                Expression.Add(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))),
+                        4
                     )),
+                    Expression.Assign(flagCY, Expression.GreaterThan(temp3, c(0xFF))),
                     Expression.Assign(flagS, bit(temp3, 7)),
                     Expression.Assign(flagX1, bit(temp3, 3)),
                     Expression.Assign(flagX2, bit(temp3, 5)),
@@ -944,7 +951,8 @@ namespace Z80Core
                             Expression.And(temp1, c(0x80)),
                             Expression.And(temp3, c(0x80))
                         )
-                    )), Expression.Assign(flagN, c(false))
+                    )), 
+                    Expression.Assign(flagN, c(false))
                 );
             }
 
@@ -952,21 +960,27 @@ namespace Z80Core
             // SUB(C) A, n
             for (int reg = 0; reg < 18; reg++)
             {
+                // 0..7  -> 0x90..0x97: SUB A,s    (s: B, C, D, E, H, L, (HL), A)
+                // 0..15 -> 0x98..0x9F: SBC A,s    
+                // 16    -> 0xD6:       SUB A,n
+                // 17    -> 0xDE:       SBC A,n
                 var opcode = reg < 16 ? reg + 0x90 : (reg - 16) * 8 + 0xD6;
+                var withCarry = reg >= 8 && reg != 16;
                 microExpr[opcode] = Expression.Block(
                     new[] { temp1, temp2, temp3 },
                     Expression.Assign(temp1, regA),
                     Expression.Assign(temp2, reg < 16 ? readReg8[reg % 8] : readImmediateByte),
-                    Expression.Assign(temp3, reg < 8 || reg == 16 ? (Expression)Expression.Subtract(temp1, temp2) : (Expression)Expression.Condition(flagCY, Expression.Decrement(Expression.Subtract(temp1, temp2)), Expression.Subtract(temp1, temp2))),
+                    Expression.Assign(temp3, withCarry 
+                        ? Expression.Subtract(Expression.Subtract(temp1, temp2), carry)
+                        : Expression.Subtract(temp1, temp2)),
                     Expression.Assign(regA, temp3),
-                    Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
-                    Expression.Assign(flagHC, Expression.NotEqual(
-                        Expression.Subtract(
-                            Expression.And(temp1, c(0x10)),
-                            Expression.And(temp2, c(0x10))
-                        ),
-                        Expression.And(temp3, c(0x10))
+                    Expression.Assign(flagHC, bit(
+                        withCarry
+                        ? Expression.Subtract(Expression.Subtract(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))), carry)
+                        : Expression.Subtract(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))),
+                        4
                     )),
+                    Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
                     Expression.Assign(flagS, bit(temp3, 7)),
                     Expression.Assign(flagX1, bit(temp3, 3)),
                     Expression.Assign(flagX2, bit(temp3, 5)),
@@ -1092,6 +1106,8 @@ namespace Z80Core
             // AND A, n
             for (int reg = 0; reg < 9; reg++)
             {
+                // 0..7  -> 0xA0..0xA7: AND A,s    (s: B, C, D, E, H, L, (HL), A)
+                // 8     -> 0xE6:       AND A,n
                 var opcode = reg < 8 ? reg + 0xA0 : 0xE6;
                 microExpr[opcode] = Expression.Block(
                     new[] { temp1, temp2, temp3 },
@@ -1104,10 +1120,8 @@ namespace Z80Core
                     Expression.Assign(flagS, bit(temp3, 7)),
                     Expression.Assign(flagX1, bit(temp3, 3)),
                     Expression.Assign(flagX2, bit(temp3, 5)),
-                    Expression.Assign(flagZ, Expression.Equal(temp3, c(0x00))),
-                    // Special case: Overflow can never occur in AND-operation
-                    // PV is set when bit7 of both operands are equal and bit7 of result is different
-                    Expression.Assign(flagPV, c(false)),
+                    Expression.Assign(flagZ, isZero(temp3)),
+                    Expression.Assign(flagPV, getParity(temp3)),
                     Expression.Assign(flagN, c(false))
                 );
             }
@@ -1116,6 +1130,8 @@ namespace Z80Core
             // OR A, n
             for (int reg = 0; reg < 9; reg++)
             {
+                // 0..7  -> 0xB0..0xB7: OR A,s    (s: B, C, D, E, H, L, (HL), A)
+                // 8     -> 0xF6:       OR A,n
                 var opcode = reg < 8 ? reg + 0xB0 : 0xF6;
                 microExpr[opcode] = Expression.Block(
                     new[] { temp1, temp2, temp3 },
@@ -1128,10 +1144,8 @@ namespace Z80Core
                     Expression.Assign(flagS, bit(temp3, 7)),
                     Expression.Assign(flagX1, bit(temp3, 3)),
                     Expression.Assign(flagX2, bit(temp3, 5)),
-                    Expression.Assign(flagZ, Expression.Equal(temp3, c(0x00))),
-                    // Special case: Overflow can never occur in OR-operation
-                    // PV is set when bit7 of both operands are equal and bit7 of result is different
-                    Expression.Assign(flagPV, c(false)),
+                    Expression.Assign(flagZ, isZero(temp3)),
+                    Expression.Assign(flagPV, getParity(temp3)),
                     Expression.Assign(flagN, c(false))
                 );
             }
@@ -1140,6 +1154,8 @@ namespace Z80Core
             // XOR A, n
             for (int reg = 0; reg < 9; reg++)
             {
+                // 0..7  -> 0xB0..0xB7: OR A,s    (s: B, C, D, E, H, L, (HL), A)
+                // 8     -> 0xF6:       OR A,n
                 var opcode = reg < 8 ? reg + 0xA8 : 0xEE;
                 microExpr[opcode] = Expression.Block(
                     new[] { temp1, temp2, temp3 },
@@ -1152,7 +1168,7 @@ namespace Z80Core
                     Expression.Assign(flagS, bit(temp3, 7)),
                     Expression.Assign(flagX1, bit(temp3, 3)),
                     Expression.Assign(flagX2, bit(temp3, 5)),
-                    Expression.Assign(flagZ, Expression.Equal(temp3, c(0x00))),
+                    Expression.Assign(flagZ, isZero(temp3)),
                     Expression.Assign(flagPV, getParity(temp3)),
                     Expression.Assign(flagN, c(false))
                 );
@@ -1162,23 +1178,22 @@ namespace Z80Core
             // CP A, n
             for (int reg = 0; reg < 9; reg++)
             {
+                // 0..7  -> 0xB8..0xBF: CP A,s    (s: B, C, D, E, H, L, (HL), A)
+                // 8     -> 0xFE:       CP A,n
                 var opcode = reg < 8 ? reg + 0xB8 : 0xFE;
                 microExpr[opcode] = Expression.Block(
                     new[] { temp1, temp2, temp3 },
                     Expression.Assign(temp1, regA),
                     Expression.Assign(temp2, reg < 8 ? readReg8[reg] : readImmediateByte),
-                    Expression.Assign(temp3, (Expression)Expression.Subtract(temp1, temp2)),
-                    Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
-                    Expression.Assign(flagHC, Expression.NotEqual(
-                        Expression.Subtract(
-                            Expression.And(temp1, c(0x10)),
-                            Expression.And(temp2, c(0x10))
-                        ),
-                        Expression.And(temp3, c(0x10))
+                    Expression.Assign(temp3, Expression.Subtract(temp1, temp2)),
+                    Expression.Assign(flagHC, bit(
+                        Expression.Subtract(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))),
+                        4
                     )),
+                    Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
                     Expression.Assign(flagS, bit(temp3, 7)),
-                    Expression.Assign(flagX1, bit(temp3, 3)),
-                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagX1, bit(temp2, 3)),
+                    Expression.Assign(flagX2, bit(temp2, 5)),
                     Expression.Assign(flagZ, isZero(temp3)),
                     Expression.Assign(flagPV, Expression.AndAlso(
                         Expression.NotEqual(
