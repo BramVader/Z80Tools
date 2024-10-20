@@ -926,15 +926,15 @@ namespace Z80Core
                     new[] { temp1, temp2, temp3 },
                     Expression.Assign(temp1, regA),
                     Expression.Assign(temp2, reg < 16 ? readReg8[reg % 8] : readImmediateByte),
-                    Expression.Assign(temp3, withCarry 
-                        ? Expression.Add(Expression.Add(temp1, temp2), carry) 
+                    Expression.Assign(temp3, withCarry
+                        ? Expression.Add(Expression.Add(temp1, temp2), carry)
                         : (Expression)Expression.Add(temp1, temp2)
                     ),
                     Expression.Assign(regA, temp3),
                     Expression.Assign(flagHC, bit(
-                        withCarry 
-                        ? Expression.Add(Expression.Add(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))), carry) 
-                        :                Expression.Add(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))),
+                        withCarry
+                        ? Expression.Add(Expression.Add(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))), carry)
+                        : Expression.Add(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))),
                         4
                     )),
                     Expression.Assign(flagCY, Expression.GreaterThan(temp3, c(0xFF))),
@@ -951,7 +951,7 @@ namespace Z80Core
                             Expression.And(temp1, c(0x80)),
                             Expression.And(temp3, c(0x80))
                         )
-                    )), 
+                    )),
                     Expression.Assign(flagN, c(false))
                 );
             }
@@ -970,7 +970,7 @@ namespace Z80Core
                     new[] { temp1, temp2, temp3 },
                     Expression.Assign(temp1, regA),
                     Expression.Assign(temp2, reg < 16 ? readReg8[reg % 8] : readImmediateByte),
-                    Expression.Assign(temp3, withCarry 
+                    Expression.Assign(temp3, withCarry
                         ? Expression.Subtract(Expression.Subtract(temp1, temp2), carry)
                         : Expression.Subtract(temp1, temp2)),
                     Expression.Assign(regA, temp3),
@@ -1192,6 +1192,7 @@ namespace Z80Core
                     )),
                     Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
                     Expression.Assign(flagS, bit(temp3, 7)),
+                    // Note: X and Y are copied from the argument, not the result!
                     Expression.Assign(flagX1, bit(temp2, 3)),
                     Expression.Assign(flagX2, bit(temp2, 5)),
                     Expression.Assign(flagZ, isZero(temp3)),
@@ -1679,6 +1680,11 @@ namespace Z80Core
 
         private void BuildLoopInstuctions()
         {
+            var temp1 = Expression.Variable(typeof(int), "temp1");
+            var temp2 = Expression.Variable(typeof(int), "temp2");
+            var temp3 = Expression.Variable(typeof(int), "temp3");
+            var temp4 = Expression.Variable(typeof(int), "temp4");
+
             // LDI(R)
             // LDD(R)
             for (int n = 0; n < 4; n++)
@@ -1710,49 +1716,52 @@ namespace Z80Core
             }
 
             // CPI(R)
-            // CPD(R)
-            var temp1 = Expression.Variable(typeof(int));
-            var temp2 = Expression.Variable(typeof(int));
-            var temp3 = Expression.Variable(typeof(int));
+            // CPD(R) 
             for (int n = 0; n < 4; n++)
             {
-                var list = new List<Expression>
-                    {
-                        Expression.Assign(temp1, regA),
-                        Expression.Assign(temp2, readByte(regHL)),
-                        Expression.Assign(temp3, (Expression)Expression.Subtract(temp1, temp2)),
-                        Expression.Assign(regHL, (n & 1) == 0 ?
-                            Expression.Increment(regHL) :
-                            Expression.Decrement(regHL)
-                        ),
-                        Expression.Assign(regBC, Expression.Decrement(regBC)),
-                        Expression.Assign(flagHC, Expression.NotEqual(
-                            Expression.Subtract(
-                                Expression.And(temp1, c(0x10)),
-                                Expression.And(temp2, c(0x10))
-                            ),
-                            Expression.And(temp3, c(0x10))
-                        )),
-                        Expression.Assign(flagS, bit(temp3, 7)),
-                        Expression.Assign(flagX1, bit(temp3, 3)),
-                        Expression.Assign(flagX2, bit(temp3, 5)),
-                        Expression.Assign(flagZ, isZero(temp3)),
-                        Expression.Assign(flagPV, Expression.NotEqual(regBC, c(0))),
-                        Expression.Assign(flagN, c(true))
-                    };
-
-                // the (R) part...
+                // 0     -> 0xED 0xA1:  CPI
+                // 1     -> 0xED 0xA9:  CPD
+                // 2     -> 0xED 0xB1:  CPIR
+                // 3     -> 0xED 0xB9:  CPDR      
+                var opcode = (n << 3) | 0xA1;
+                var expr = new List<Expression>
+                {
+                    Expression.Assign(temp1, regA),
+                    Expression.Assign(temp2, readByte(regHL)),
+                    Expression.Assign(temp3, Expression.Subtract(temp1, temp2)),
+                    Expression.Assign(regHL, (n & 1) == 0 ? 
+                        Expression.Increment(regHL) : 
+                        Expression.Decrement(regHL)
+                    ),
+                    Expression.Assign(regBC, Expression.Decrement(regBC)),
+                    Expression.Assign(flagHC, bit(
+                        Expression.Subtract(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))),
+                        4
+                    )),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    // Note: X1 is bit 3 of (A-(HL)-HC); X2 is bit 1 (!)
+                    // of this value. (HL) is the value of (HL) before the
+                    // instruction, whilst HC is the value of HC after the
+                    // instruction!  (see https://worldofspectrum.org/faq/reference/z80reference.htm)
+                    Expression.Assign(temp4, Expression.Condition(flagHC, Expression.Subtract(temp3, c(1)), temp3)),
+                    Expression.Assign(flagX1, bit(temp4, 3)),
+                    Expression.Assign(flagX2, bit(temp4, 1)),
+                    Expression.Assign(flagZ, isZero(temp3)),
+                    Expression.Assign(flagPV, Expression.NotEqual(regBC, c(0))),
+                    Expression.Assign(flagN, c(true))
+                };
                 if (n >= 2)
-                    list.Add(Expression.IfThenElse(
-                        Expression.AndAlso(flagPV, Expression.NotEqual(temp3, c(0))),
-                        Expression.Assign(regPC, Expression.Subtract(regPC, c(2))),
-                        takeStatesLow
+                {
+                    // CPIR/CPDR: Decrement PC by 2 when no true compare
+                    expr.Add(Expression.IfThen(
+                        Expression.AndAlso(
+                            Expression.NotEqual(regBC, c(0)),
+                            Expression.Not(flagZ)
+                        ),
+                        Expression.Assign(regPC, Expression.Subtract(regPC, c(2)))
                     ));
-
-                microExprED[0xA1 + n * 8] = Expression.Block(
-                    new[] { temp1, temp2, temp3 },
-                    list
-                );
+                }
+                microExprED[opcode] = Expression.Block(new ParameterExpression[] { temp1, temp2, temp3, temp4 }, expr);
             }
 
             // INI(R)
