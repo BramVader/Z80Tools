@@ -271,7 +271,6 @@ namespace Z80TestConsole
             {
                 context = new VisitContext() { Hexmode = hexMode, Formatter = formatter ?? new HtmlFormatter() };
                 string result = Visit(expr, Precedence.Highest);
-                if (!result.EndsWith(";")) result += ";";
                 return context.Formatter.Finalize(result);
             }
 
@@ -476,7 +475,7 @@ namespace Z80TestConsole
                                 String.Format(context.Formatter, "{0:String}", ccToString) :
                                     IsNumericType(expr.Type) ?
                                         String.Format(context.Formatter, "{0:Number}", ccToString) :
-                                        String.Empty;
+                                        cc.Value.ToString();
                         break;
                     //
                     // Summary:

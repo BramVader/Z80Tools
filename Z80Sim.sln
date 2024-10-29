@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30128.74
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35327.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Z80TestConsole", "Z80TestConsole\Z80TestConsole.csproj", "{2EFAC3DD-624C-4A16-B820-8B325E6156C6}"
 EndProject
@@ -21,7 +21,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Assembler.Tests", "Assemble
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Disassembler", "Disassembler\Disassembler.csproj", "{C3DEF00E-0F89-49E8-B4AE-2B72BC9BE5E0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BdosCpm", "BdosCpm\BdosCpm.csproj", "{97307667-2A7E-422F-B1B9-DF15ECE42237}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BdosCpm", "BdosCpm\BdosCpm.csproj", "{97307667-2A7E-422F-B1B9-DF15ECE42237}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Main", "..\Z80dotNet\Main\Main.csproj", "{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -144,6 +146,18 @@ Global
 		{97307667-2A7E-422F-B1B9-DF15ECE42237}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{97307667-2A7E-422F-B1B9-DF15ECE42237}.Release|x86.ActiveCfg = Release|Any CPU
 		{97307667-2A7E-422F-B1B9-DF15ECE42237}.Release|x86.Build.0 = Release|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Debug|x86.Build.0 = Debug|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Release|x86.ActiveCfg = Release|Any CPU
+		{BBA3EC3E-C8F8-421C-A450-5C206BACDC98}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

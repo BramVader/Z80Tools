@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -10,6 +11,11 @@ namespace Z80Core
     {
         public int StatesNormal { get; set; }   // The highest value
         public int StatesLow { get; set; }      // A possible lower value
+
+        public override string ToString()
+        {
+            return String.Format("{{ Normal: {0}, Low: {1} }}", StatesNormal, StatesLow);
+        }
     }
 
     internal class Z80EmulatorBuilder
@@ -76,7 +82,7 @@ namespace Z80Core
             { 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 15, 15, 15, 15}
         };
 
-        private Action<Z80Emulator>[] microCode, microCodeCB, microCodeDD, microCodeED, microCodeFD;
+        private Action<Z80Emulator>[] microCode, microCodeCB, microCodeED, microCodeDD, microCodeFD;
         private Action<Z80Emulator, int>[] microCodeDDCB, microCodeFDCB;
         private Expression[] microExpr, microExprCB, microExprDD, microExprED, microExprFD, microExprDDCB, microExprFDCB;
         private Expression handleIntExpr, handleNmiExpr;
@@ -101,12 +107,11 @@ namespace Z80Core
         private Expression readIndirect8, readIndirect16;
         private Func<Expression, Expression> cInt;
         private Func<Expression, Expression> getParity;
-        private Func<Expression, Expression> signExtendByte;
-        private Func<Expression, Expression> signExtendWord;
         private Func<object, Expression> c;
         private Func<Expression, int, Expression> bit;
         private Func<Expression, Expression> isZero;
         private bool[] parityTable;
+        private Func<Expression, Expression> writeDebug;
         Func<Expression, Expression> writeIndirect8, writeIndirect16;
         Expression pop;
         Func<Expression, Expression> push;
@@ -121,23 +126,40 @@ namespace Z80Core
             private readonly MemberExpression indexRegL;
             private readonly MemberExpression indexRegH;
             private readonly Z80EmulatorBuilder builder;
-            private readonly Expression indexed;
+            private readonly ParameterExpression dispPar;
+            private readonly Expression index;
 
             public int Opcode { get; set; }
 
-            public IndexRegReplacer(Z80EmulatorBuilder builder,
-                                    MemberExpression indexReg, MemberExpression indexRegL, MemberExpression indexRegH)
+            public bool NeedsDisp { get; private set; }
+
+            public IndexRegReplacer(
+                Z80EmulatorBuilder builder,
+                MemberExpression indexReg,
+                MemberExpression indexRegL,
+                MemberExpression indexRegH,
+                ParameterExpression dispPar
+            )
             {
                 this.builder = builder;
                 this.indexReg = indexReg;
                 this.indexRegL = indexRegL;
                 this.indexRegH = indexRegH;
+                this.dispPar = dispPar;
 
-                this.indexed =
-                    Expression.Add(
-                        indexReg,
-                        builder.readImmediateOffset
-                    );
+                this.index = Expression.Add(
+                    indexReg, // IX or IY
+                    Expression.Subtract(    // Sign-extent the dispPar
+                        Expression.ExclusiveOr(dispPar, Expression.Constant(0x80)),
+                        Expression.Constant(0x80)
+                    )
+                );
+            }
+
+            public Expression Convert(Expression node)
+            {
+                NeedsDisp = false;
+                return base.Visit(node);
             }
 
             protected override Expression VisitMember(MemberExpression node)
@@ -157,37 +179,39 @@ namespace Z80Core
                     {
                         return base.VisitMember(indexRegL);
                     }
-                }
-                if (node == builder.regHL)
-                {
-                    return base.VisitMember(indexReg);
+                    if (node == builder.regHL)
+                    {
+                        return base.VisitMember(indexReg);
+                    }
                 }
                 return base.VisitMember(node);
             }
 
             protected override Expression VisitInvocation(InvocationExpression node)
             {
+                // is it a read from/write to (HL)?
                 if (node.Expression is MemberExpression mb1 &&
                     node.Arguments[0] is MemberExpression mb2 &&
                     mb2 == builder.regHL
                 )
                 {
-                    var ind2 = indexed;
-                    if (mb1.Member.Name == "WriteMemory")
+                    if (mb1.Member.Name == nameof(Z80Emulator.WriteMemory))
                     {
+                        NeedsDisp = true;
                         return VisitInvocation(node.Update(
                             mb1, new[] {
-                                ind2,
+                                index,
                                 node.Arguments[1]
                             })
                         );
 
                     }
-                    else if (mb1.Member.Name == "ReadMemory")
+                    else if (mb1.Member.Name == nameof(Z80Emulator.ReadMemory))
                     {
+                        NeedsDisp = true;
                         return VisitInvocation(node.Update(
                             mb1, new[] {
-                                ind2
+                                index
                             })
                         );
                     }
@@ -196,42 +220,70 @@ namespace Z80Core
             }
         }
 
-        private void ReplaceIndexedCB(MemberExpression indexReg, Expression[] microExprXDCB, ParameterExpression dispPar)
+        // NOPs
+        private Timing Nop1 => timing[0x00];
+
+        private Timing Nop2 => timingDDCB[0x00];
+
+        private Timing Nop3 => timingDD[0x00];
+
+        private Expression ExtendWithTiming(Expression microExpr, MemberExpression timingProp, Timing timing, Timing nopTiming) =>
+            microExpr != null
+            ? Expression.Block(Expression.Assign(timingProp, Expression.Constant(timing)), microExpr)
+            : Expression.Assign(timingProp, Expression.Constant(nopTiming));
+
+        private Action<Z80Emulator> Compile(Expression expr) =>
+            Expression.Lambda<Action<Z80Emulator>>(expr, par).Compile();
+
+        private Action<Z80Emulator, int> Compile(Expression expr, ParameterExpression dispPar) =>
+            Expression.Lambda<Action<Z80Emulator, int>>(expr, par, dispPar).Compile();
+
+        // Converts a signed byte to a signed int (e.g. 7F -> 0000 007F, 80 -> FFFF FF80)
+        private Expression SignExtend(Expression p) =>
+            Expression.Subtract(Expression.ExclusiveOr(p, c(0x80)), c(0x80));
+
+        // Converts instructions that access H, L, HL or (HL) to IXH/IYH, IXL/IYL, IX/IY, (IX+d)/(IY+d)
+        private void ReplaceIndexedXD(IndexRegReplacer converter, Expression[] microExprXD, ParameterExpression dispPar)
         {
-            var indexed =
-                Expression.Add(
-                    indexReg,
-                    signExtendByte(dispPar)
-                );
-            var temp1 = Expression.Variable(typeof(int));
             for (int n = 0; n < 256; n++)
             {
-                var reg = n & 7;
-                var expr = microExprCB[n];
-                if (expr != null)
+                if (n == 0xEB)      // EX DE, HL        : remains unaffected
                 {
-                    var blockExpr = expr as BlockExpression;
-                    var variables = blockExpr == null ? new List<ParameterExpression>() : blockExpr.Variables.ToList();
-                    var list = blockExpr == null ? new List<Expression> { expr } : blockExpr.Expressions.ToList();
-
-                    variables.Add(temp1);
-                    list.InsertRange(0, new[] {
-                            Expression.Assign(temp1, indexed),
-                            writeReg8[reg](readByte(temp1))
-                        });
-                    list.Add(writeByte(temp1, readReg8[reg]));
-                    microExprXDCB[n] =
-                        Expression.Block(
-                            variables,
-                            list
-                        );
+                    microExprXD[n] = microExpr[n];
+                }
+                else
+                {
+                    if (n != 0x34 &&    // INC (I* + d)     : have specific implementation
+                        n != 0x35)      // DEC (I* + d)       (would read offset twice otherwise)
+                    {
+                        converter.Opcode = n;
+                        microExprXD[n] = converter.Convert(microExpr[n]);
+                        if (converter.NeedsDisp)    // (IX + d) or (IY + d)? Read the d-byte first and assign it to 'disp'
+                        {
+                            var blockExpr = microExprXD[n] as BlockExpression;
+                            var variables = blockExpr == null ? new List<ParameterExpression>() : blockExpr.Variables.ToList();
+                            var list = blockExpr == null ? new List<Expression> { microExprXD[n] } : blockExpr.Expressions.ToList();
+                            variables.Add(dispPar);
+                            list.Insert(0, Expression.Assign(dispPar, readImmediateByte));
+                            microExprXD[n] = Expression.Block
+                            (
+                                variables,
+                                list
+                            );
+                        }
+                    }
                 }
             }
         }
 
-        public Z80EmulatorBuilder()
+        public void Build()
         {
             Init();
+
+            // Contains the "d" offset value as in (IX+d) or (IY+d)
+            var dispPar = Expression.Parameter(typeof(int), "disp");
+            var timingProp = GetMember<Z80Registers>(regs, p => p.Timing);
+
             BuildLoadInstructions();
             BuildStackInstructions();
             BuildControlStructures();
@@ -241,101 +293,101 @@ namespace Z80Core
             BuildLoopInstuctions();
             BuildInterrupts();
             BuildMisc();
+            BuildCBxx(microExprCB);
+            BuildCBxx(microExprDDCB, regIX, dispPar);
+            BuildCBxx(microExprFDCB, regIY, dispPar);
 
             // Convert basic expressions to indexed expressions
-            var converter = new IndexRegReplacer(this, regIX, regIXL, regIXH);
-            for (int n = 0; n < 256; n++)
+            var converter = new IndexRegReplacer(this, regIX, regIXL, regIXH, dispPar);
+            ReplaceIndexedXD(converter, microExprDD, dispPar);
+
+            converter = new IndexRegReplacer(this, regIY, regIYL, regIYH, dispPar);
+            ReplaceIndexedXD(converter, microExprFD, dispPar);
+
+            // Compile CB-prefixed expressions
+            for (int opcode = 0; opcode < 256; opcode++)
             {
-                if (n == 0xEB)      // EX DE, HL        : remains unaffected
+                // Add timing to the CB prefix instructions
+                microExprCB[opcode] = ExtendWithTiming(microExprCB[opcode], timingProp, timingCB[opcode], Nop3);
+                // and compile it
+                microCodeCB[opcode] = Compile(microExprCB[opcode]);
+            }
+
+            // Compile DDCB-prefixed expressions
+            for (int opcode = 0; opcode < 256; opcode++)
+            {
+                // Add timing to the DDCB prefix instructions
+                microExprDDCB[opcode] = ExtendWithTiming(microExprDDCB[opcode], timingProp, timingDDCB[opcode], Nop3);
+                // and compile it
+                microCodeDDCB[opcode] = Compile(microExprDDCB[opcode], dispPar);
+            }
+
+            // Compile FDCB-prefixed expressions
+            for (int opcode = 0; opcode < 256; opcode++)
+            {
+                // Add timing to the FDCB prefix instructions
+                microExprFDCB[opcode] = ExtendWithTiming(microExprFDCB[opcode], timingProp, timingFDCB[opcode], Nop3);
+                // and compile it
+                microCodeFDCB[opcode] = Compile(microExprFDCB[opcode], dispPar);
+            }
+
+            // Compile DD-prefixed instructions
+            for (int opcode = 0; opcode < 256; opcode++)
+            {
+                if (opcode == 0xCB)
                 {
-                    microExprDD[n] = microExpr[n];
+                    microExprDD[0xCB] = Expression.Block(
+                        new[] { dispPar },
+                        Expression.Assign(dispPar, readImmediateByte), // read "d" as in (IX+d) or (IY+d)
+                        Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeDDCB"), readImmediateByte), par, dispPar)
+                    );
                 }
                 else
                 {
-                    if (n != 0x34 &&    // INC (IX + d)     : have specific implementation
-                        n != 0x35)      // DEC (IX + d)       (would read offset twice otherwise)
-                    {
-                        converter.Opcode = n;
-                        microExprDD[n] = converter.Visit(microExpr[n]);
-                    }
+                    microExprDD[opcode] = ExtendWithTiming(microExprDD[opcode], timingProp, timingDD[opcode], Nop3);
                 }
+                microCodeDD[opcode] = Compile(microExprDD[opcode]);
             }
-            converter = new IndexRegReplacer(this, regIY, regIYL, regIYH);
-            for (int n = 0; n < 256; n++)
+
+            // Compile ED-prefixed instructions
+            for (int opcode = 0; opcode < 256; opcode++)
             {
-                if (n == 0xEB)      // EX DE, HL        : remains unaffected
+                microExprED[opcode] = ExtendWithTiming(microExprED[opcode], timingProp, timingED[opcode], Nop3);
+                microCodeED[opcode] = Compile(microExprED[opcode]);
+            }
+
+            // Compile FD-prefixed instructions
+            for (int opcode = 0; opcode < 256; opcode++)
+            {
+                if (opcode == 0xCB)
                 {
-                    microExprFD[n] = microExpr[n];
+                    microExprFD[0xCB] = Expression.Block(
+                        new[] { dispPar },
+                        Expression.Assign(dispPar, readImmediateByte),
+                        Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeFDCB"), readImmediateByte), par, dispPar)
+                    );
                 }
                 else
                 {
-                    if (n != 0x34 &&    // INC (IY + d)     : have specific implementation
-                        n != 0x35)      // DEC (IY + d)       (would read offset twice otherwise)
-                    {
-                        converter.Opcode = n;
-                        microExprFD[n] = converter.Visit(microExpr[n]);
-                    }
+                    microExprFD[opcode] = ExtendWithTiming(microExprFD[opcode], timingProp, timingFD[opcode], Nop3);
                 }
+                microCodeFD[opcode] = Compile(microExprFD[opcode]);
             }
 
-            var dispPar = Expression.Parameter(typeof(int), "disp");
-            var timingProp = GetMember<Z80Registers>(regs, p => p.Timing);
-            ReplaceIndexedCB(regIX, microExprDDCB, dispPar);
-            ReplaceIndexedCB(regIY, microExprFDCB, dispPar);
-
-            // NOPs
-            void nop1(Z80Emulator e) { Expression.Assign(timingProp, Expression.Constant(timing[0x00])); }
-            void nop2(Z80Emulator e, int f) { Expression.Assign(timingProp, Expression.Constant(timingDDCB[0x00])); }
-            void nop3(Z80Emulator e) { Expression.Assign(timingProp, Expression.Constant(timingDD[0x00])); }
-
-            // Compile indexed prefixed expressions
-            for (int n = 0; n < 256; n++)
-            {
-                microCodeDDCB[n] = microExprDDCB[n] != null ? Expression.Lambda<Action<Z80Emulator, int>>(Expression.Block(Expression.Assign(timingProp, Expression.Constant(timingDDCB[n])), microExprDDCB[n]), par, dispPar).Compile() : nop2;
-                microCodeFDCB[n] = microExprFDCB[n] != null ? Expression.Lambda<Action<Z80Emulator, int>>(Expression.Block(Expression.Assign(timingProp, Expression.Constant(timingFDCB[n])), microExprFDCB[n]), par, dispPar).Compile() : nop2;
-            }
-            var disp = Expression.Variable(typeof(int), "disp");
-            microExprDD[0xCB] = Expression.Block(
-                new[] { disp },
-                Expression.Assign(disp, readImmediateByte),
-                Expression.Invoke(Expression.ArrayAccess(Expression.Constant(microCodeDDCB), readImmediateByte), par, disp)
-            );
-            microExprFD[0xCB] = Expression.Block(
-                new[] { disp },
-                Expression.Assign(disp, readImmediateByte),
-                Expression.Invoke(Expression.ArrayAccess(Expression.Constant(microCodeFDCB), readImmediateByte), par, disp)
-            );
-
-            // Compile prefixed expressions
-            for (int n = 0; n < 256; n++)
-            {
-                microCodeCB[n] = microExprCB[n] != null ? Expression.Lambda<Action<Z80Emulator>>(Expression.Block(Expression.Assign(timingProp, Expression.Constant(timingCB[n])), microExprCB[n]), par).Compile() : nop3;
-                if (n != 0xCB)
-                    microCodeDD[n] = microExprDD[n] != null ? Expression.Lambda<Action<Z80Emulator>>(Expression.Block(Expression.Assign(timingProp, Expression.Constant(timingDD[n])), microExprDD[n]), par).Compile() : nop3;
-                else
-                    microCodeDD[n] = Expression.Lambda<Action<Z80Emulator>>(microExprDD[n], par).Compile();
-                microCodeED[n] = microExprED[n] != null ? Expression.Lambda<Action<Z80Emulator>>(Expression.Block(Expression.Assign(timingProp, Expression.Constant(timingED[n])), microExprED[n]), par).Compile() : nop3;
-                if (n != 0xCB)
-                    microCodeFD[n] = microExprFD[n] != null ? Expression.Lambda<Action<Z80Emulator>>(Expression.Block(Expression.Assign(timingProp, Expression.Constant(timingFD[n])), microExprFD[n]), par).Compile() : nop3;
-                else
-                    microCodeFD[n] = Expression.Lambda<Action<Z80Emulator>>(microExprFD[n], par).Compile();
-            }
-            microExpr[0xCB] = Expression.Invoke(Expression.ArrayAccess(Expression.Constant(microCodeCB), readImmediateByte), par);
-            microExpr[0xDD] = Expression.Invoke(Expression.ArrayAccess(Expression.Constant(microCodeDD), readImmediateByte), par);
-            microExpr[0xED] = Expression.Invoke(Expression.ArrayAccess(Expression.Constant(microCodeED), readImmediateByte), par);
-            microExpr[0xFD] = Expression.Invoke(Expression.ArrayAccess(Expression.Constant(microCodeFD), readImmediateByte), par);
+            microExpr[0xCB] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeCB"), readImmediateByte), par);
+            microExpr[0xDD] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeDD"), readImmediateByte), par);
+            microExpr[0xED] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeED"), readImmediateByte), par);
+            microExpr[0xFD] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeFD"), readImmediateByte), par);
 
             // Compile basic expressions
             for (int n = 0; n < 256; n++)
             {
+                // Add timing when it's not a prefixed instruction
                 if (n != 0xCB && n != 0xDD && n != 0xED && n != 0xFD)
                 {
-                    microCode[n] = microExpr[n] != null ? Expression.Lambda<Action<Z80Emulator>>(Expression.Block(Expression.Assign(timingProp, Expression.Constant(timing[n])), microExpr[n]), par).Compile() : nop1;
+                    microExpr[n] = ExtendWithTiming(microExpr[n], timingProp, timing[n], Nop1);
                 }
-                else
-                {
-                    microCode[n] = Expression.Lambda<Action<Z80Emulator>>(microExpr[n], par).Compile();
-                }
+                microCode[n] = Compile(microExpr[n]);
             }
         }
 
@@ -347,6 +399,13 @@ namespace Z80Core
             MemberExpression member = expr as MemberExpression;
             return Expression.MakeMemberAccess(instance, member.Member);
         }
+        private static MemberExpression GetMember<TElement>(Expression instance, string name)
+        {
+            var member = typeof(TElement).GetMember(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            return Expression.MakeMemberAccess(instance, member[0]);
+        }
+
+
 
         private void InitTiming()
         {
@@ -502,11 +561,8 @@ namespace Z80Core
                     )
                 );
 
-            signExtendByte = p => Expression.Subtract(Expression.ExclusiveOr(p, c(0x80)), c(0x80));
-            signExtendWord = p => Expression.Subtract(Expression.ExclusiveOr(p, c(0x8000)), c(0x8000));
-
             // Reads a signed byte and expands it to an int representation, e.g. 0000 00F9 becomes FFFF FFF9
-            readImmediateOffset = signExtendByte(readImmediateByte);
+            readImmediateOffset = SignExtend(readImmediateByte);
 
             // Read 8-bit data, referenced by 16-bit address operand
             readIndirect8 = readByte(readImmediateWord);
@@ -593,7 +649,11 @@ namespace Z80Core
             }
 
             getParity = (p) =>
-                Expression.ArrayAccess(Expression.Field(null, typeof(Z80Emulator).GetField("parityTable", BindingFlags.NonPublic | BindingFlags.Static)), Expression.And(p, c(0xFF)));
+                Expression.ArrayAccess(Expression.Field(par, typeof(Z80Emulator).GetField("parityTable", BindingFlags.NonPublic | BindingFlags.Instance)), Expression.And(p, c(0xFF)));
+
+            Expression<Action> textwriterWriteObjectFinder = () => default(TextWriter).Write("", (object)null);
+
+            writeDebug = (p) => Expression.Call(GetMember<Z80Emulator>(par, par => par.Debugger), (textwriterWriteObjectFinder.Body as MethodCallExpression).Method, Expression.Constant("[{0:X2}]"), Expression.Convert(p, typeof(object)));
 
             InitTiming();
         }
@@ -852,18 +912,24 @@ namespace Z80Core
                 {
                     var opcode = reg * 8 + 0x04 + incDec;
                     microExpr[opcode] = Expression.Block(
-                        new[] { temp1 },
-                        Expression.Assign(temp1, incDec == 0
-                            ? Expression.Increment(readReg8[reg])
-                            : Expression.Decrement(readReg8[reg])
+                        new[] { temp1, temp2 },
+                        Expression.Assign(temp1, readReg8[reg]),
+                        Expression.Assign(temp2, incDec == 0
+                            ? Expression.Increment(temp1)
+                            : Expression.Decrement(temp1)
                         ),
-                        writeReg8[reg](temp1),
-                        Expression.Assign(flagS, bit(temp1, 7)),
-                        Expression.Assign(flagX1, bit(temp1, 3)),
-                        Expression.Assign(flagX2, bit(temp1, 5)),
-                        Expression.Assign(flagZ, isZero(temp1)),
-                        Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, c(0x0F)), c(0x00))),
-                        Expression.Assign(flagPV, Expression.Equal(temp1, c(0x80))),
+                        writeReg8[reg](temp2),
+                        Expression.Assign(flagS, bit(temp2, 7)),
+                        Expression.Assign(flagX1, bit(temp2, 3)),
+                        Expression.Assign(flagX2, bit(temp2, 5)),
+                        Expression.Assign(flagZ, isZero(temp2)),
+                        Expression.Assign(flagHC, bit(
+                            incDec == 0 
+                            ? Expression.Increment(Expression.And(temp1, c(0x0F)))
+                            : Expression.Decrement(Expression.And(temp1, c(0x0F))),
+                            4
+                        )),
+                        Expression.Assign(flagPV, Expression.Equal(temp2, incDec == 0 ? c(0x80) : c(0x7F))),
                         Expression.Assign(flagN, Expression.Constant(incDec == 1))
                     );
                 }
@@ -873,22 +939,28 @@ namespace Z80Core
                 for (int reg = 0; reg < 2; reg++)
                 {
                     var block = Expression.Block(
-                        new[] { temp1, temp4 },
+                        new[] { temp1, temp2, temp4 },
                         Expression.Assign(temp4,
-                            readByte(Expression.Add(reg == 0 ? regIX : regIY, readImmediateOffset))
+                            Expression.Add(reg == 0 ? regIX : regIY, readImmediateOffset)
                         ),
-                        Expression.Assign(temp1, incDec == 0
-                            ? Expression.Increment(readByte(temp4))
-                            : Expression.Decrement(readByte(temp4))
+                        Expression.Assign(temp1, readByte(temp4)),
+                        Expression.Assign(temp2, incDec == 0
+                            ? Expression.Increment(temp1)
+                            : Expression.Decrement(temp1)
                         ),
-                        writeByte(temp4, temp1),
-                        Expression.Assign(flagS, bit(temp1, 7)),
-                        Expression.Assign(flagX1, bit(temp1, 3)),
-                        Expression.Assign(flagX2, bit(temp1, 5)),
-                        Expression.Assign(flagZ, isZero(temp1)),
-                        Expression.Assign(flagHC, Expression.Equal(Expression.And(temp1, c(0x0F)), c(0x00))),
-                        Expression.Assign(flagPV, Expression.Equal(temp1, c(0x80))),
-                        Expression.Assign(flagN, c(incDec == 1))
+                        writeByte(temp4, temp2),
+                        Expression.Assign(flagS, bit(temp2, 7)),
+                        Expression.Assign(flagX1, bit(temp2, 3)),
+                        Expression.Assign(flagX2, bit(temp2, 5)),
+                        Expression.Assign(flagZ, isZero(temp2)),
+                        Expression.Assign(flagHC, bit(
+                            incDec == 0
+                            ? Expression.Increment(Expression.And(temp1, c(0x0F)))
+                            : Expression.Decrement(Expression.And(temp1, c(0x0F))),
+                            4
+                        )),
+                        Expression.Assign(flagPV, Expression.Equal(temp2, incDec == 0 ? c(0x80) : c(0x7F))),
+                        Expression.Assign(flagN, Expression.Constant(incDec == 1))
                     );
                     if (reg == 0)
                         microExprDD[0x34 + incDec] = block;
@@ -1245,7 +1317,7 @@ namespace Z80Core
             microExpr[0x27] = Expression.Block(
                 new[] { corrFactor, temp1, temp2 },
                 Expression.Assign(temp1, regA),
-                Expression.IfThenElse(Expression.OrElse(flagCY, Expression.GreaterThan(temp1, c(0x90))),
+                Expression.IfThenElse(Expression.OrElse(flagCY, Expression.GreaterThan(temp1, c(0x99))),
                     Expression.Block(
                         Expression.Assign(corrFactor, c(0x60)),
                         Expression.Assign(flagCY, c(true))
@@ -1273,15 +1345,7 @@ namespace Z80Core
                         c(0x10)
                     )
                 ),
-                Expression.Assign(flagPV,
-                    Expression.Equal(
-                        Expression.And(
-                            Expression.ExclusiveOr(temp1, temp2),
-                            c(0x80)
-                        ),
-                        c(0x80)
-                    )
-                ),
+                Expression.Assign(flagPV, getParity(temp2)),
                 Expression.Assign(flagS, bit(temp2, 7)),
                 Expression.Assign(flagX1, bit(temp2, 3)),
                 Expression.Assign(flagX2, bit(temp2, 5)),
@@ -1357,192 +1421,6 @@ namespace Z80Core
                 Expression.Assign(regA, temp2),
                 Expression.Assign(flagCY, bit(temp1, 0))
             );
-
-            // RLC <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2,
-                        Expression.Or(
-                            Expression.LeftShift(temp1, c(1)),
-                            Expression.RightShift(temp1, c(7))
-                        )
-                    ),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 7)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(temp2))
-                );
-            }
-
-            // RRC <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[0x08 + reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2,
-                        Expression.Or(
-                            Expression.RightShift(temp1, c(1)),
-                            Expression.LeftShift(temp1, c(7))
-                        )
-                    ),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 0)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(temp2))
-                );
-            }
-
-            // RL <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[0x10 + reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2,
-                        Expression.Condition(
-                            flagCY,
-                            Expression.Or(
-                                Expression.LeftShift(temp1, c(1)),
-                                c(0x01)
-                            ),
-                            Expression.LeftShift(temp1, c(1))
-                        )
-                    ),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 7)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(temp2))
-                );
-            }
-
-            // RR <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[0x18 + reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2,
-                        Expression.Condition(
-                            flagCY,
-                            Expression.Or(
-                                Expression.RightShift(temp1, c(1)),
-                                c(0x80)
-                            ),
-                            Expression.RightShift(temp1, c(1))
-                        )
-                    ),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 0)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(Expression.And(temp2, c(0xFF))))
-                );
-            }
-
-            // SLA <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[0x20 + reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2, Expression.LeftShift(temp1, c(1))),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 7)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(temp2))
-                );
-            }
-
-            // SRA <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[0x28 + reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2, Expression.Or(
-                        Expression.RightShift(temp1, c(1)),
-                        Expression.And(temp1, c(0x80))
-                    )),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 0)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(temp2))
-                );
-            }
-
-            // SLL <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[0x30 + reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2, Expression.Or(
-                        Expression.LeftShift(temp1, c(1)),
-                        c(0x01)
-                    )),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 7)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(temp2))
-                );
-            }
-
-            // SRL <reg8>
-            for (int reg = 0; reg < 8; reg++)
-            {
-                microExprCB[0x38 + reg] = Expression.Block(
-                    new[] { temp1, temp2 },
-                    Expression.Assign(temp1, readReg8[reg]),
-                    Expression.Assign(temp2, Expression.RightShift(temp1, c(1))),
-                    writeReg8[reg](temp2),
-                    Expression.Assign(flagCY, bit(temp1, 0)),
-                    Expression.Assign(flagS, bit(temp2, 7)),
-                    Expression.Assign(flagX1, bit(temp2, 3)),
-                    Expression.Assign(flagX2, bit(temp2, 5)),
-                    Expression.Assign(flagZ, isZero(temp2)),
-                    Expression.Assign(flagHC, c(false)),
-                    Expression.Assign(flagN, c(false)),
-                    Expression.Assign(flagPV, getParity(temp2))
-                );
-            }
 
             // RLD
             microExprED[0x6F] = Expression.Block(
@@ -1646,36 +1524,6 @@ namespace Z80Core
                 Expression.Assign(flagN, c(false)),
                 Expression.Assign(flagPV, getParity(temp3))
             );
-
-            // BIT <bit>, <reg>
-            for (int reg = 0; reg < 8; reg++)
-                for (int bit = 0; bit < 8; bit++)
-                {
-                    microExprCB[bit * 8 + reg + 0x40] = Expression.Block(
-                        new[] { temp1 },
-                        Expression.Assign(temp1, readReg8[reg]),
-                        Expression.Assign(flagZ, Expression.Equal(Expression.And(temp1, Expression.Constant(1 << bit)), c(0x00))),
-                        Expression.Assign(flagHC, c(true)),
-                        Expression.Assign(flagN, c(false))
-                    );
-                }
-
-            // RES <bit>, <reg>
-            for (int reg = 0; reg < 8; reg++)
-                for (int bit = 0; bit < 8; bit++)
-                {
-                    microExprCB[bit * 8 + reg + 0x80] =
-                        writeReg8[reg](Expression.And(readReg8[reg], Expression.Constant(~(1 << bit))));
-                }
-
-
-            // SET <bit>, <reg>
-            for (int reg = 0; reg < 8; reg++)
-                for (int bit = 0; bit < 8; bit++)
-                {
-                    microExprCB[bit * 8 + reg + 0xC0] =
-                        writeReg8[reg](Expression.Or(readReg8[reg], Expression.Constant(1 << bit)));
-                }
         }
 
         private void BuildLoopInstuctions()
@@ -1729,8 +1577,8 @@ namespace Z80Core
                     Expression.Assign(temp1, regA),
                     Expression.Assign(temp2, readByte(regHL)),
                     Expression.Assign(temp3, Expression.Subtract(temp1, temp2)),
-                    Expression.Assign(regHL, (n & 1) == 0 ? 
-                        Expression.Increment(regHL) : 
+                    Expression.Assign(regHL, (n & 1) == 0 ?
+                        Expression.Increment(regHL) :
                         Expression.Decrement(regHL)
                     ),
                     Expression.Assign(regBC, Expression.Decrement(regBC)),
@@ -1855,9 +1703,13 @@ namespace Z80Core
 
             // CPL
             microExpr[0x2F] = Expression.Block(
-                Expression.Assign(regA, Expression.ExclusiveOr(regA, c(0xFF))),
+                new[] { temp1 },
+                Expression.Assign(temp1, Expression.ExclusiveOr(regA, c(0xFF))),
+                Expression.Assign(regA, temp1),
                 Expression.Assign(flagHC, c(true)),
-                Expression.Assign(flagN, c(true))
+                Expression.Assign(flagN, c(true)),
+                Expression.Assign(flagX1, bit(temp1, 3)),
+                Expression.Assign(flagX2, bit(temp1, 5))
             );
 
             // DI
@@ -1976,6 +1828,235 @@ namespace Z80Core
             }
         }
 
+
+        private void BuildCBxx(Expression[] microExprCBxx, MemberExpression regXX = null, ParameterExpression dispPar = null)
+        {
+            var input = Expression.Variable(typeof(int));
+            var output = Expression.Variable(typeof(int));
+
+            for (int reg = 0; reg < 8; reg++)
+            {
+                // Read either from register or from (IX+d) / (IY + d)
+                Expression read(Expression data) => Expression.Assign(data, regXX == null
+                        ? readReg8[reg]
+                        : readByte(Expression.Add(regXX, SignExtend(dispPar)))
+                    );
+
+                // Write either to register or to both register and (IX+d) / (IY + d)
+                Expression write(Expression data) =>
+                    regXX == null
+                    ? writeReg8[reg](data)
+                    : reg == 6     // when reg = (HL), write only to (IX + d) / (IY + d)
+                    ? writeByte(Expression.Add(regXX, SignExtend(dispPar)), data)
+                    :   // In other cases write both to the register and (IX + d) / (IY + d) (undocumented)
+                        Expression.Block(
+                            writeByte(Expression.Add(regXX, SignExtend(dispPar)), data),
+                            writeReg8[reg](data)
+                        );
+
+                // RLC <reg8>
+                microExprCBxx[reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output,
+                        Expression.Or(
+                            Expression.LeftShift(input, c(1)),
+                            Expression.RightShift(input, c(7))
+                        )
+                    ),
+                    write(output),
+                    Expression.Assign(flagCY, bit(input, 7)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(output))
+                );
+
+                // RRC <reg8>
+                microExprCBxx[0x08 + reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output,
+                        Expression.Or(
+                            Expression.RightShift(input, c(1)),
+                            Expression.LeftShift(input, c(7))
+                        )
+                    ),
+                    writeReg8[reg](output),
+                    Expression.Assign(flagCY, bit(input, 0)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(output))
+                );
+
+                // RL <reg8>
+                microExprCBxx[0x10 + reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output,
+                        Expression.Condition(
+                            flagCY,
+                            Expression.Or(
+                                Expression.LeftShift(input, c(1)),
+                                c(0x01)
+                            ),
+                            Expression.LeftShift(input, c(1))
+                        )
+                    ),
+                    writeReg8[reg](output),
+                    Expression.Assign(flagCY, bit(input, 7)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(output))
+                );
+
+                // RR <reg8>
+                microExprCBxx[0x18 + reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output,
+                        Expression.Condition(
+                            flagCY,
+                            Expression.Or(
+                                Expression.RightShift(input, c(1)),
+                                c(0x80)
+                            ),
+                            Expression.RightShift(input, c(1))
+                        )
+                    ),
+                    writeReg8[reg](output),
+                    Expression.Assign(flagCY, bit(input, 0)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(Expression.And(output, c(0xFF))))
+                );
+
+                // SLA <reg8>
+                microExprCBxx[0x20 + reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output, Expression.LeftShift(input, c(1))),
+                    writeReg8[reg](output),
+                    Expression.Assign(flagCY, bit(input, 7)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(output))
+                );
+
+                // SRA <reg8>
+                microExprCBxx[0x28 + reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output, Expression.Or(
+                        Expression.RightShift(input, c(1)),
+                        Expression.And(input, c(0x80))
+                    )),
+                    writeReg8[reg](output),
+                    Expression.Assign(flagCY, bit(input, 0)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(output))
+                );
+
+                // SLL <reg8>
+                microExprCBxx[0x30 + reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output, Expression.Or(
+                        Expression.LeftShift(input, c(1)),
+                        c(0x01)
+                    )),
+                    writeReg8[reg](output),
+                    Expression.Assign(flagCY, bit(input, 7)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(output))
+                );
+
+                // SRL <reg8>
+                microExprCBxx[0x38 + reg] = Expression.Block(
+                    new[] { input, output },
+                    read(input),
+                    Expression.Assign(output, Expression.RightShift(input, c(1))),
+                    writeReg8[reg](output),
+                    Expression.Assign(flagCY, bit(input, 0)),
+                    Expression.Assign(flagS, bit(output, 7)),
+                    Expression.Assign(flagX1, bit(output, 3)),
+                    Expression.Assign(flagX2, bit(output, 5)),
+                    Expression.Assign(flagZ, isZero(output)),
+                    Expression.Assign(flagHC, c(false)),
+                    Expression.Assign(flagN, c(false)),
+                    Expression.Assign(flagPV, getParity(output))
+                );
+
+                // BIT <bit>, <reg>
+                for (int bitNr = 0; bitNr < 8; bitNr++)
+                {
+                    microExprCBxx[bitNr * 8 + reg + 0x40] = Expression.Block(
+                        new[] { input },
+                        read(input),
+                        Expression.Assign(flagZ, Expression.Equal(Expression.And(input, Expression.Constant(1 << bitNr)), c(0x00))),
+                        Expression.Assign(flagPV, flagZ),
+                        Expression.Assign(flagHC, c(true)),
+                        Expression.Assign(flagN, c(false)),
+                        Expression.Assign(flagS, bitNr == 7 ? bit(input, 7) : c(false))
+                    );
+                }
+
+                // RES <bit>, <reg>
+                for (int bitNr = 0; bitNr < 8; bitNr++)
+                {
+                    microExprCBxx[bitNr * 8 + reg + 0x80] =
+                        Expression.Block(
+                        new[] { input, output },
+                        read(input),
+                        Expression.Assign(output, Expression.And(input, Expression.Constant(~(1 << bitNr)))),
+                        write(output)
+                    );
+                }
+
+
+                // SET <bit>, <reg>
+                for (int bitNr = 0; bitNr < 8; bitNr++)
+                {
+                    microExprCBxx[bitNr * 8 + reg + 0xC0] =
+                        Expression.Block(
+                        new[] { input, output },
+                        read(input),
+                        Expression.Assign(output, Expression.Or(input, Expression.Constant(1 << bitNr))),
+                        write(output)
+                    );
+                }
+            }
+        }
+
         private void BuildInterrupts()
         {
             var dataOnBusPar = Expression.Parameter(typeof(byte), "dataOnBus");
@@ -2035,11 +2116,41 @@ namespace Z80Core
             handleNmi = Expression.Lambda<Action<Z80Emulator, byte>>(handleNmiExpr, par, dataOnBusPar).Compile();
         }
 
-        #region Generated code
+        #region Microcode
 
         public Action<Z80Emulator>[] MicroCode
         {
             get { return microCode; }
+        }
+
+        public Action<Z80Emulator>[] MicroCodeCB
+        {
+            get { return microCodeCB; }
+        }
+
+        public Action<Z80Emulator>[] MicroCodeDD
+        {
+            get { return microCodeDD; }
+        }
+
+        public Action<Z80Emulator>[] MicroCodeED
+        {
+            get { return microCodeED; }
+        }
+
+        public Action<Z80Emulator>[] MicroCodeFD
+        {
+            get { return microCodeFD; }
+        }
+
+        public Action<Z80Emulator, int>[] MicroCodeDDCB
+        {
+            get { return microCodeDDCB; }
+        }
+
+        public Action<Z80Emulator, int>[] MicroCodeFDCB
+        {
+            get { return microCodeFDCB; }
         }
 
         public Action<Z80Emulator, byte> HandleInt
