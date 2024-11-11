@@ -95,13 +95,14 @@ loop:	ld	a,(hl)		; end of list ?
 done:	ld	de,msg2
 	ld	c,9
 	call	bdos
+	halt
 	jp	0		; warm boot
 
 tests:
-	;dw	adc16
-	;dw	add16
-	;dw	add16x
-	;dw	add16y
+	dw	adc16
+	dw	add16
+	dw	add16x
+	dw	add16y
 	dw	alu8i
 	dw	alu8r
 	dw	alu8rx
@@ -1202,7 +1203,7 @@ bdos:	push	af
 	pop	af
 	ret
 
-msg1:	db	'Z80 instruction exerciser',10,13,'$'
+msg1:	db	'Z80 instruction exerciser (zexdoc)',10,13,'$'
 msg2:	db	'Tests complete$'
 okmsg:	db	'  OK',10,13,'$'
 ermsg1:	db	'  ERROR **** crc expected:$'

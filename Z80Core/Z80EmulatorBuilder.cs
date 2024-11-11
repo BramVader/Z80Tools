@@ -1283,10 +1283,22 @@ namespace Z80Core
             }
 
             // SCF
-            microExpr[0x37] = Expression.Assign(flagCY, c(true));
+            microExpr[0x37] = Expression.Block(
+                Expression.Assign(flagCY, c(true)),
+                Expression.Assign(flagN, c(false)),
+                Expression.Assign(flagHC, c(false)),
+                Expression.Assign(flagX1, bit(regA, 3)),
+                Expression.Assign(flagX2, bit(regA, 5))
+            );
 
             // CCF
-            microExpr[0x3F] = Expression.Assign(flagCY, c(false));
+            microExpr[0x3F] = Expression.Block(
+                Expression.Assign(flagHC, flagCY),
+                Expression.Assign(flagCY, Expression.Not(flagCY)),
+                Expression.Assign(flagN, c(false)),
+                Expression.Assign(flagX1, bit(regA, 3)),
+                Expression.Assign(flagX2, bit(regA, 5))
+            );
 
             // DAA
             // - If the A register is greater than 0x99, OR the Carry flag is SET, then
@@ -1355,8 +1367,33 @@ namespace Z80Core
             // NEG
             for (int n = 0; n < 8; n++)
             {
-                microExprED[0x44 + n * 8] =
-                    Expression.Assign(regA, Expression.Negate(regA));
+                microExprED[0x44 + n * 8] = Expression.Block(
+                    new[] { temp1, temp2, temp3 },
+                    Expression.Assign(temp1, Expression.Constant(0)),
+                    Expression.Assign(temp2, regA),
+                    Expression.Assign(temp3, Expression.Subtract(temp1, temp2)),
+                    Expression.Assign(regA, temp3),
+                    Expression.Assign(flagHC, bit(
+                        Expression.Subtract(Expression.And(temp1, c(0x0F)), Expression.And(temp2, c(0x0F))),
+                        4
+                    )),
+                    Expression.Assign(flagCY, Expression.LessThan(temp3, c(0x00))),
+                    Expression.Assign(flagS, bit(temp3, 7)),
+                    Expression.Assign(flagX1, bit(temp3, 3)),
+                    Expression.Assign(flagX2, bit(temp3, 5)),
+                    Expression.Assign(flagZ, isZero(temp3)),
+                    Expression.Assign(flagPV, Expression.AndAlso(
+                        Expression.NotEqual(
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp2, c(0x80))
+                        ),
+                        Expression.NotEqual(
+                            Expression.And(temp1, c(0x80)),
+                            Expression.And(temp3, c(0x80))
+                        )
+                    )),
+                    Expression.Assign(flagN, c(true))
+                );
             }
         }
 
@@ -1368,58 +1405,66 @@ namespace Z80Core
 
             // RLCA
             microExpr[0x07] = Expression.Block(
-                new[] { temp1 },
+                new[] { temp1, temp2 },
                 Expression.Assign(temp1, regA),
-                Expression.Assign(regA, Expression.Or(
+                Expression.Assign(temp2, Expression.Or(
                     Expression.LeftShift(temp1, c(1)),
                     Expression.RightShift(temp1, c(7))
                 )),
-                Expression.Assign(flagCY, bit(temp1, 7))
+                Expression.Assign(regA, temp2),
+                Expression.Assign(flagCY, bit(temp1, 7)),
+                Expression.Assign(flagN, c(false)),
+                Expression.Assign(flagHC, c(false)),
+                Expression.Assign(flagX1, bit(temp2, 3)),
+                Expression.Assign(flagX2, bit(temp2, 5))
             );
 
             // RRCA
             microExpr[0x0F] = Expression.Block(
-                new[] { temp1 },
+                new[] { temp1, temp2 },
                 Expression.Assign(temp1, regA),
-                Expression.Assign(regA, Expression.Or(
+                Expression.Assign(temp2, Expression.Or(
                     Expression.RightShift(temp1, c(1)),
                     Expression.LeftShift(temp1, c(7))
                 )),
+                Expression.Assign(regA, temp2),
                 Expression.Assign(flagCY, bit(temp1, 0)),
+                Expression.Assign(flagN, c(false)),
                 Expression.Assign(flagHC, c(false)),
-                Expression.Assign(flagN, c(false))
+                Expression.Assign(flagX1, bit(temp2, 3)),
+                Expression.Assign(flagX2, bit(temp2, 5))
             );
 
             // RLA
             microExpr[0x17] = Expression.Block(
                 new[] { temp1, temp2 },
                 Expression.Assign(temp1, regA),
-                Expression.Assign(temp2, Expression.Condition(
-                    flagCY,
-                    Expression.Or(
-                        Expression.LeftShift(temp1, c(1)),
-                        c(0x01)
-                    ),
-                    Expression.LeftShift(temp1, c(1))
+                Expression.Assign(temp2, Expression.Or(
+                    Expression.LeftShift(temp1, c(1)),
+                    carry
                 )),
                 Expression.Assign(regA, temp2),
-                Expression.Assign(flagCY, bit(temp1, 7))
+                Expression.Assign(flagCY, bit(temp1, 7)),
+                Expression.Assign(flagN, c(false)),
+                Expression.Assign(flagHC, c(false)),
+                Expression.Assign(flagX1, bit(temp2, 3)),
+                Expression.Assign(flagX2, bit(temp2, 5))
             );
 
             // RRA
             microExpr[0x1F] = Expression.Block(
                 new[] { temp1, temp2 },
                 Expression.Assign(temp1, regA),
-                Expression.Assign(temp2, Expression.Condition(
-                    flagCY,
-                    Expression.Or(
-                        Expression.RightShift(temp1, c(1)),
-                        c(0x80)
-                    ),
-                    Expression.RightShift(temp1, c(1))
+                Expression.Assign(temp2, Expression.Or(
+                    Expression.RightShift(temp1, c(1)),
+                    Expression.LeftShift(carry, c(7))
                 )),
                 Expression.Assign(regA, temp2),
-                Expression.Assign(flagCY, bit(temp1, 0))
+                Expression.Assign(flagCY, bit(temp1, 0)),
+                Expression.Assign(flagN, c(false)),
+                Expression.Assign(flagHC, c(false)),
+                Expression.Assign(flagX1, bit(temp2, 3)),
+                Expression.Assign(flagX2, bit(temp2, 5))
             );
 
             // RLD
@@ -1885,7 +1930,7 @@ namespace Z80Core
                             Expression.LeftShift(input, c(7))
                         )
                     ),
-                    writeReg8[reg](output),
+                    write(output),
                     Expression.Assign(flagCY, bit(input, 0)),
                     Expression.Assign(flagS, bit(output, 7)),
                     Expression.Assign(flagX1, bit(output, 3)),
@@ -1910,7 +1955,7 @@ namespace Z80Core
                             Expression.LeftShift(input, c(1))
                         )
                     ),
-                    writeReg8[reg](output),
+                    write(output),
                     Expression.Assign(flagCY, bit(input, 7)),
                     Expression.Assign(flagS, bit(output, 7)),
                     Expression.Assign(flagX1, bit(output, 3)),
@@ -1935,7 +1980,7 @@ namespace Z80Core
                             Expression.RightShift(input, c(1))
                         )
                     ),
-                    writeReg8[reg](output),
+                    write(output),
                     Expression.Assign(flagCY, bit(input, 0)),
                     Expression.Assign(flagS, bit(output, 7)),
                     Expression.Assign(flagX1, bit(output, 3)),
@@ -1951,7 +1996,7 @@ namespace Z80Core
                     new[] { input, output },
                     read(input),
                     Expression.Assign(output, Expression.LeftShift(input, c(1))),
-                    writeReg8[reg](output),
+                    write(output),
                     Expression.Assign(flagCY, bit(input, 7)),
                     Expression.Assign(flagS, bit(output, 7)),
                     Expression.Assign(flagX1, bit(output, 3)),
@@ -1970,7 +2015,7 @@ namespace Z80Core
                         Expression.RightShift(input, c(1)),
                         Expression.And(input, c(0x80))
                     )),
-                    writeReg8[reg](output),
+                    write(output),
                     Expression.Assign(flagCY, bit(input, 0)),
                     Expression.Assign(flagS, bit(output, 7)),
                     Expression.Assign(flagX1, bit(output, 3)),
@@ -1989,7 +2034,7 @@ namespace Z80Core
                         Expression.LeftShift(input, c(1)),
                         c(0x01)
                     )),
-                    writeReg8[reg](output),
+                    write(output),
                     Expression.Assign(flagCY, bit(input, 7)),
                     Expression.Assign(flagS, bit(output, 7)),
                     Expression.Assign(flagX1, bit(output, 3)),
@@ -2005,7 +2050,7 @@ namespace Z80Core
                     new[] { input, output },
                     read(input),
                     Expression.Assign(output, Expression.RightShift(input, c(1))),
-                    writeReg8[reg](output),
+                    write(output),
                     Expression.Assign(flagCY, bit(input, 0)),
                     Expression.Assign(flagS, bit(output, 7)),
                     Expression.Assign(flagX1, bit(output, 3)),

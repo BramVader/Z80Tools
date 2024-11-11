@@ -15,7 +15,7 @@ namespace Z80Validator
             try
             {
                 var ass = Assembly.GetExecutingAssembly();
-                var streamName = ass.GetManifestResourceNames().First(it => it.Contains("zexall.a80"));
+                var streamName = ass.GetManifestResourceNames().First(it => it.Contains("zexdoc.a80"));
                 using var sr = new StreamReader(ass.GetManifestResourceStream(streamName));
                 using var sw = new StreamWriter(new FileStream("output.lst", FileMode.Create, FileAccess.Write, FileShare.Read));
                 var assembler = new Z80Assembler();

@@ -51,27 +51,33 @@ namespace Assembler
             var tokens = new List<Token>();
             var stringDelimiter = '\'';
             bool expectingOperand = true;
+            bool negateOperand = false;
             while (i < chars.Length)
             {
                 char ch = chars[i++];
+                if (mode == Mode.None)
+                {
+                    if (ch == '-' && expectingOperand)
+                    {
+                        negateOperand = true;
+                        continue;
+                    }
+                    if (ch == '+' && expectingOperand)
+                    {
+                        negateOperand = false;
+                        continue;
+                    }
+                }
                 switch (mode)
                 {
                     case Mode.None:
                         switch (ch)
                         {
-                            case char n when (n >= '0' && n <= '9') || (n == '-'):
-                                if (n == '-' && !expectingOperand)
-                                {
-                                    tokens.Add(new Token { Type = TokenType.Subtract });
-                                    expectingOperand = true;
-                                }
-                                else
-                                {
-                                    mode = Mode.Number;
-                                    radix = defaultRadix;
-                                    bufferIndex = 0;
-                                    buffer[bufferIndex++] = ch;
-                                }
+                            case char n when (n >= '0' && n <= '9'):
+                                mode = Mode.Number;
+                                radix = defaultRadix;
+                                bufferIndex = 0;
+                                buffer[bufferIndex++] = ch;
                                 break;
                             case '\'':
                             case '"':
@@ -141,39 +147,25 @@ namespace Assembler
                         }
                         if (finish)
                         {
-                            // Just a minus sign?
-                            if (bufferIndex == 1 && buffer[0] == '-')
+                            string rawValue = new(buffer, 0, bufferIndex);
+                            bool trimIt = true;
+                            switch (Char.ToUpper(rawValue[^1]))
                             {
-                                if (expectingOperand)
-                                {
-                                    tokens.Add(new Token { Type = TokenType.Neg });
-                                }
-                                else
-                                {
-                                    tokens.Add(new Token { Type = TokenType.Subtract });
-                                    expectingOperand = true;
-                                }
+                                case '.': radix = 10; break;
+                                case 'B': if (radix != 16) radix = 2; break;
+                                case 'D': if (radix != 16) radix = 10; break;
+                                case 'H': radix = 16; break;
+                                case 'O': radix = 8; break;
+                                case 'Q': radix = 8; break;
+                                default:
+                                    trimIt = false;
+                                    break;
                             }
-                            else
-                            {
-                                string rawValue = new(buffer, 0, bufferIndex);
-                                bool trimIt = true;
-                                switch (Char.ToUpper(rawValue[^1]))
-                                {
-                                    case '.': radix = 10; break;
-                                    case 'B': if (radix != 16) radix = 2; break;
-                                    case 'D': if (radix != 16) radix = 10; break;
-                                    case 'H': radix = 16; break;
-                                    case 'O': radix = 8; break;
-                                    case 'Q': radix = 8; break;
-                                    default:
-                                        trimIt = false;
-                                        break;
-                                }
-                                if (trimIt) rawValue = rawValue[0..^1];
-                                tokens.Add(new Token { Type = TokenType.Number, Value = Convert.ToInt32(rawValue, radix) });
-                                expectingOperand = false;
-                            }
+                            if (trimIt) rawValue = rawValue[0..^1];
+                            int value = Convert.ToInt32(rawValue, radix);
+                            tokens.Add(new Token { Type = TokenType.Number, Value = negateOperand ? -value : value });
+                            expectingOperand = false;
+                            negateOperand = false;
                             mode = Mode.None;
                         }
                         break;
@@ -219,6 +211,8 @@ namespace Assembler
                         if (finish2)
                         {
                             string symbol = new(buffer, 0, bufferIndex);
+                            if (negateOperand)
+                                tokens.Add(new Token { Type = TokenType.Neg });
                             if (symbol == "$")
                                 tokens.Add(new Token { Type = TokenType.LocationCounter });
                             else if (operatorMap.TryGetValue(symbol, out var tokenType))
@@ -228,6 +222,7 @@ namespace Assembler
                             else
                                 tokens.Add(new Token { Type = TokenType.Symbol, Value = symbol });
                             mode = Mode.None;
+                            negateOperand = false;
                             expectingOperand = false;
                         }
                         break;

@@ -42,6 +42,8 @@ namespace Z80Core
             ["$N+2"] = OperandType.Relative,  // -> XX
             ["$NN"] = OperandType.Absolute,   // -> XX XX
             ["NN"] = OperandType.ImWord,      // -> XX XX
+            ["IX+N"] = OperandType.ImByte,    // -> 
+            ["IY+N"] = OperandType.ImByte,    // -> 
             ["N"] = OperandType.ImByte,       // -> XX
             ["b"] = OperandType.Bit           // -> 8*b
         };
@@ -60,7 +62,11 @@ namespace Z80Core
             {
                 var operandType = operandTypeMap[match.Value];
                 operandList.Add(operandType);
-                operandRegStr = operandRegStr.Replace(Regex.Escape(match.Value), "([^(),]+)");
+                operandRegStr = match.Value == "IX+N"
+                    ? $"IX((?:\\+|-)[^(),]+)"
+                    : match.Value == "IY+N"
+                    ? $"IY((?:\\+|-)[^(),]+)"
+                    : operandRegStr.Replace(Regex.Escape(match.Value), "([^(),]+)");
             }
             var operandMatcher = new Regex(operandRegStr, RegexOptions.Compiled | RegexOptions.IgnoreCase);
             var byteExpr = new List<Func<int[], byte>>();

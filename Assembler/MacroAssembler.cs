@@ -9,7 +9,7 @@ namespace Assembler
 {
     public abstract class MacroAssembler
     {
-        private static readonly Regex lineRegex = new(@"^\s*(\S+:)?\s*(\.?\w+)?\s*((?:(?:'.*?')|(?:`.*?`)|(?:[^'`;]+))+)?\s*(;.*)?$".Replace('`', '"'), RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex lineRegex = new(@"^\s*(\S+:{1,2})?\s*(\.?\w+)?\s*((?:(?:'.*?')|(?:`.*?`)|(?:[^'`;]+))+)?\s*(;.*)?$".Replace('`', '"'), RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         private static readonly Dictionary<string, TokenType> macroMap = new()
         {
@@ -160,6 +160,13 @@ namespace Assembler
                 string operands = match.Groups[3].Value.Trim();
                 string comment = match.Groups[4].Value;
 
+                if (operands.Contains("EQU"))
+                {
+                    label = opcode;
+                    opcode = operands.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                    operands = String.Join(' ', operands.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1).First());
+                }
+
                 if (macroMap.TryGetValue(opcode, out TokenType macroType))
                 {
                     state.BeginMacro(label.TrimEnd(':'), operands, macroType);
@@ -202,7 +209,7 @@ namespace Assembler
                     return;
                 }
 
-                if (label.EndsWith(':') && opcode != "EQU")
+                if (!String.IsNullOrEmpty(label) && opcode != "EQU")
                 {
                     state.SetLabel(ComposeLabel(label, state), state.SymbolType);
                 }

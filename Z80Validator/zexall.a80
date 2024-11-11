@@ -83,7 +83,7 @@ start:	ld	hl,(6)
 	ld	c,9
 	call	bdos
 
-	ld	hl,tests    	; first test case
+	ld	hl,tests		; first test case
 loop:	ld	a,(hl)		; end of list ?
 	inc	hl
 	or	(hl)
@@ -95,6 +95,7 @@ loop:	ld	a,(hl)		; end of list ?
 done:	ld	de,msg2
 	ld	c,9
 	call	bdos
+	halt
 	jp	0		; warm boot
 
 tests:
@@ -1060,7 +1061,7 @@ test:	push	af
 	push	bc
 	push	de
 	push	hl
-      if	0
+	  if	0
 	ld	de,crlf
 	ld	c,9
 	call	bdos
@@ -1073,7 +1074,7 @@ test:	push	af
 	ld	b,16
 	ld	hl,msbt
 	call	hexstr
-      endif
+	  endif
 	di			; disable interrupts
 	ld	(spsav),sp	; save stack pointer
 	ld	sp,msbt+2	; point to test-case machine state
@@ -1109,7 +1110,7 @@ tcrc:	ld	a,(de)
 	call	updcrc		; accumulate crc of this test case
 	dec	b
 	jp	nz,tcrc
-      if	0
+	  if	0
 	ld	e,' '
 	ld	c,2
 	call	bdos
@@ -1124,7 +1125,7 @@ tcrc:	ld	a,(de)
 	ld	de,crlf
 	ld	c,9
 	call	bdos
-      endif
+	  endif
 	pop	hl
 	pop	de
 	pop	bc
@@ -1202,7 +1203,7 @@ bdos:	push	af
 	pop	af
 	ret
 
-msg1:	db	'Z80 instruction exerciser',10,13,'$'
+msg1:	db	'Z80 instruction exerciser (zexall)',10,13,'$'
 msg2:	db	'Tests complete$'
 okmsg:	db	'  OK',10,13,'$'
 ermsg1:	db	'  ERROR **** crc expected:$'
@@ -1257,13 +1258,13 @@ crclp:	ld	a,(de)
 	inc	hl
 	dec	c
 	jp	nz,crclp
-      if	0
+	  if	0
 	ld	hl,crcval
 	call	phex8
 	ld	de,crlf
 	ld	c,9
 	call	bdos
-      endif
+	  endif
 	pop	hl
 	pop	de
 	pop	bc
