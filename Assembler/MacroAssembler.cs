@@ -26,6 +26,10 @@ namespace Assembler
 
             var state = new State();
             await Initialize();
+
+            // 2-pass compilation:
+            // - First pass: Full assembly pass but certain forward declared label addresses might be unknown - no output emitted
+            // - Second pass: Full assembly pass, all label should have valid values - output will be emitted
             for (int pass = 0; pass < 2; pass++)
             {
                 state.Pass = pass;
@@ -77,56 +81,21 @@ namespace Assembler
             return objArr.Cast<int>().ToArray();
         }
 
-        public static string ValueToString(object val)
-        {
-            return val switch
-            {
-                null => "NULL",
-                int v => v.ToString("X4"),
-                string v => $"\"{v}\"",
-                object[] arr => String.Join(", ", arr.Select(it => ValueToString(it))),
-                _ => val.ToString()
-            };
-        }
-
-        private async Task ExpandMacro(Macro macro, string operands, State state, OutputCollector outputCollector)
-        {
-            var macroState = state.BeginMacroExpansion(macro);
-            var arguments = Compiler.Get(operands, state);
-            macroState.SetArguments(arguments);
-
-            // Document the macro arguments
-            if (state.Pass == 1)
-            {
-                await outputCollector.EmitComment(state.LineNr, $"; CALLING {macro.Name}");
-                foreach (var it in macroState.Macro.ParNames.Select((it, i) => new { Name = it, Value = i < arguments.Length ? arguments[i] : null }))
-                {
-                    await outputCollector.EmitComment(state.LineNr, $"; - {it.Name}: {ValueToString(it.Value)}");
-                }
-            }
-            foreach (var line in macro.Lines)
-            {
-                await AssembleLine(line, state, outputCollector);
-            }
-        }
-
         private static string ComposeLabel(string operands, State state)
         {
-            var parts = State.SplitLabel(operands);
+            (var symbol, var parts) = State.SplitLabel(operands);
 
-            string symbol = parts[0];
-            if (parts[1] != "")
+            foreach (var part in parts)
             {
                 if (state.CurrentExpansion == null)
                     throw new InvalidOperationException("Symbol expansion with '&' only allowed within macro definition");
-                var replacementName = state.CurrentExpansion.GetSubstitute(parts[1]);
+                var replacementName = state.CurrentExpansion.GetSubstitute(part);
                 symbol += replacementName ?? throw new InvalidOperationException($"Unknown local symbol in macro {state.CurrentExpansion.Macro.Name}");
             }
-
             return symbol;
         }
 
-        private async Task AssembleLine(string line, State state, OutputCollector outputCollector)
+        internal async Task AssembleLine(string line, State state, OutputCollector outputCollector)
         {
             try
             {
@@ -160,7 +129,7 @@ namespace Assembler
                 string operands = match.Groups[3].Value.Trim();
                 string comment = match.Groups[4].Value;
 
-                if (operands.Contains("EQU"))
+                if (operands.Contains("EQU") || operands.Contains("SET"))
                 {
                     label = opcode;
                     opcode = operands.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
@@ -176,24 +145,20 @@ namespace Assembler
                 {
                     if (state.CurrentMacro != null)
                     {
-                        state.CurrentMacro.AddLine(line);
-
-                        // If macro has no name apply it immediately (inline)
-                        if (String.IsNullOrWhiteSpace(state.CurrentMacro.Name))
-                        {
-                            await ExpandMacro(state.CurrentMacro, operands, state, outputCollector);
-                        }
-
+                        var currentMacro = state.CurrentMacro;
+                        // Close the parsing of the macro first
                         state.EndMacro();
-                    }
-                    else
-                    {
-                        state.EndMacroExpansion();
+
+                        // Apply it immediately when it's not a MACRO type
+                        if (!currentMacro.RunDeferred)
+                        {
+                            await currentMacro.Expand(this, operands, state, outputCollector);
+                        }
                     }
                     return;
                 }
 
-                if (state.CurrentMacro != null)
+                if (state.CurrentMacro != null && state.CurrentExpansion?.Macro != state.CurrentMacro)
                 {
                     state.CurrentMacro.AddLine(line);
                     return;
@@ -205,13 +170,13 @@ namespace Assembler
                 var macro = state.GetMacro(opcode);
                 if (macro != null)
                 {
-                    await ExpandMacro(macro, operands, state, outputCollector);
+                    await macro.Expand(this, operands, state, outputCollector);
                     return;
                 }
 
-                if (!String.IsNullOrEmpty(label) && opcode != "EQU")
+                if (!String.IsNullOrEmpty(label) && opcode != "EQU" && opcode != "SET")
                 {
-                    state.SetLabel(ComposeLabel(label, state), state.SymbolType);
+                    state.SetLabel(ComposeLabel(label, state), state.SymbolType, label.EndsWith("::"));
                 }
 
                 byte[] bytes = null;
@@ -271,6 +236,10 @@ namespace Assembler
 
                         case "EQU":
                             state.SetSymbol(label.TrimEnd(':'), ParseInt(state, operands), true);
+                            break;
+
+                        case "SET":
+                            state.SetSymbol(label.TrimEnd(':'), ParseInt(state, operands), false);
                             break;
 
                         case "DS":

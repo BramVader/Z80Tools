@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Assembler.Macros;
 
 namespace Assembler
 {
@@ -14,91 +15,20 @@ namespace Assembler
 
     public class State
     {
-        private static readonly Regex symbolRegex = new(@"^([_A-Z\$.][_A-Z0-9\$.]*)?(?:\&([_A-Z\$.][_A-Z0-9\$.]*))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex symbolRegex = new(@"^([_A-Z$?@.][_A-Z0-9$?@.]*?)?(?:&([_A-Z$?@.][_A-Z0-9$?@.]*?))*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        public static string[] SplitLabel(string operands)
+        // Split the label into fixed and substitute parts (each starting with '&')
+        // e.g.
+        //  - ERR    is split into ("ERR", []), 
+        //  - ERR&Y  is split into ("ERR", ["Y"]), 
+        //  - &ERR&Y is split into ("", ["ERR", "Y"])
+        public static (string, string[]) SplitLabel(string operands)
         {
             operands = operands.TrimEnd(':');
             var match = symbolRegex.Match(operands);
             if (!match.Success)
                 throw new InvalidOperationException("Symbol expression expected");
-            return new[] { match.Groups[1].Value, match.Groups[2].Value };
-        }
-
-
-        public class MacroState
-        {
-            public MacroState(Macro macro)
-            {
-                this.Macro = macro;
-            }
-
-            private readonly Dictionary<string, Symbol> symbols = new(StringComparer.OrdinalIgnoreCase);
-            private readonly Dictionary<string, string> substitutes = new(StringComparer.OrdinalIgnoreCase);
-
-            public Macro Macro { get; }
-
-            public void SetArguments(object[] arguments)
-            {
-                foreach (var it in Macro.ParNames.Select((it, i) => new { Name = it, Value = i < arguments.Length ? arguments[i] : null }))
-                    SetSymbol(it.Name, it.Value, true);
-            }
-
-            public string SetSubstitute(string local, State state)
-            {
-                string substitute = state.GetUniqueLabel();
-                this.substitutes.Add(local, substitute);
-                return substitute;
-            }
-
-            public Symbol GetSymbol(string value)
-            {
-                var parts = State.SplitLabel(value);
-                string symbol = parts[0];
-                if (parts[1] != "")
-                {
-                    symbol += GetSubstitute(parts[1]);
-                }
-                return symbols.TryGetValue(symbol, out Symbol sym) ? sym : null;
-            }
-
-            public string GetSubstitute(string value) =>
-                substitutes.TryGetValue(value, out string local) ? local : value;
-
-            internal Symbol SetSymbol(Symbol symbol)
-            {
-                if (!symbols.TryGetValue(symbol.Name, out var sm))
-                {
-                    symbols.Add(symbol.Name, symbol);
-                    return symbol;
-                }
-                else
-                {
-                    if (sm.Readonly && sm.Value != null)
-                        throw new InvalidOperationException($"Symbol {sm.Name} is already set");
-                    return sm;
-                }
-            }
-
-            public Symbol SetSymbol(string name, object value, bool @readonly = false)
-            {
-                return SetSymbol(new Symbol
-                {
-                    Name = name,
-                    Value = new object[] { value },
-                    Readonly = @readonly,
-                });
-            }
-
-            public Symbol SetSymbol(string name, object[] value, bool @readonly = false)
-            {
-                return SetSymbol(new Symbol
-                {
-                    Name = name,
-                    Value = value,
-                    Readonly = @readonly,
-                });
-            }
+            return (match.Groups[1].Value, match.Groups[2].Captures.Select(it => it.Value).ToArray());
         }
 
         private readonly List<string> blockCommentCollector = new();
@@ -149,12 +79,11 @@ namespace Assembler
             return $"..{Interlocked.Increment(ref dummyCounter):X4}";
         }
 
-        public Symbol SetLabel(string name, SymbolType symbolType) =>
-            SetLabel(name, Address, symbolType);
+        public Symbol SetLabel(string name, SymbolType symbolType, bool isPublic) =>
+            SetLabel(name, Address, symbolType, isPublic);
 
-        public Symbol SetLabel(string name, int address, SymbolType symbolType)
+        public Symbol SetLabel(string name, int address, SymbolType symbolType, bool isPublic)
         {
-            bool isPublic = name.EndsWith("::");
             name = name.TrimEnd(':');
             var symbol = SetSymbol(name, address);
             symbol.IsPublic = isPublic;
@@ -173,7 +102,7 @@ namespace Assembler
 
             if (symbol == null && (!symbols.TryGetValue(name, out symbol) || symbol.Value == null))
             {
-                if (Pass == 2)
+                if (Pass == 1)
                     ThrowException($"Unknown symbol {name}");
                 return new object[] { null };
             }
@@ -255,12 +184,16 @@ namespace Assembler
 
         public Macro BeginMacro(string name, string args, TokenType macroType)
         {
-            var macro = new Macro
+            var macro = macroType switch
             {
-                Name = name,
-                ParNames = args.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(it => it.Trim()).ToList(),
-                MacroType = macroType
+                TokenType.Macro => new Macro(),
+                TokenType.Rept => new ReptMacro(),
+                //TokenType.Irp => new IrpMacro(),
+                //TokenType.Irpc => new IrpcMacro(),
+                _ => throw new NotImplementedException($"A macro type {macroType} is not implemented")
             };
+            macro.Name = name;
+            macro.ParNames = args.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(it => it.Trim()).ToList();
             if (!String.IsNullOrWhiteSpace(name)) macros.Add(name, macro);
             MacroDepth++;
             if (MacroDepth == 1) CurrentMacro = macro;
@@ -292,7 +225,7 @@ namespace Assembler
 
         public MacroState BeginMacroExpansion(Macro macro)
         {
-            var expansion = new MacroState(macro);
+            var expansion = new MacroState(macro, symbols);
             macroStates.Push(expansion);
             return expansion;
         }

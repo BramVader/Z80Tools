@@ -82,10 +82,22 @@ namespace Assembler
             foreach (var symbol in state.Symbols)
             {
                 await listWriter.WriteLineAsync(
-                    $"{' ',-12} {MacroAssembler.ValueToString(symbol.Value), -4}: {symbol.Name,-11}"
+                    $"{' ',-12} {ValueToString(symbol.Value), -4}: {symbol.Name,-11}"
                 ); ;
             }
             listWriter.Close();
+        }
+
+        public static string ValueToString(object val)
+        {
+            return val switch
+            {
+                null => "NULL",
+                int v => v.ToString("X4"),
+                string v => $"\"{v}\"",
+                object[] arr => String.Join(", ", arr.Select(it => ValueToString(it))),
+                _ => val.ToString()
+            };
         }
 
         public IEnumerable<MemorySegment> Segments => segments;
