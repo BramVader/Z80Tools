@@ -82,7 +82,7 @@ namespace BdosCpm
             memoryModel.SwitchMemory(memorySwitch);
 
             // Create Z80 emulator
-            this.emulator = new Z80Emulator
+            this.emulator = new Z80Emulator(this)
             {
                 ClockFrequency = 100.0, // MHz
                 ReadMemory = memoryModel.ReadMemory,
@@ -90,8 +90,6 @@ namespace BdosCpm
                 ReadInput = ReadInput,
                 WriteOutput = WriteOutput
             };
-            //emulator.OnCpuStep += OnCpuStep;
-            //emulator.OnInterruptAcknowledged += OnInterruptAcknowledged;
 
             var listFileReader = new ListFileReader();
             using var sr = new StreamReader(new FileStream(@"..\..\..\..\Z80Validator\bin\Debug\net5.0\output.lst", FileMode.Open, FileAccess.Read, FileShare.Read));
@@ -125,6 +123,10 @@ namespace BdosCpm
         }
 
         protected override void WriteOutput(int address, byte value)
+        {
+        }
+
+        public override void AfterInstruction(long stateCounter)
         {
         }
     }

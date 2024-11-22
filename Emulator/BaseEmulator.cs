@@ -6,11 +6,6 @@ namespace Emulator
 {
     public abstract class BaseEmulator
     {
-        public class OnCpuStepEventArgs : EventArgs
-        {
-            public long StateCounter { get; set; }
-        }
-
         public class OnBreakpointHitEventArgs : EventArgs
         {
             public Breakpoint Breakpoint { get; set; }
@@ -29,13 +24,21 @@ namespace Emulator
         protected long targetStatesPerSecond;   // Desired number of states per second, given clockFrequency
         protected Breakpoint[] breakpoints;
 
+        protected HardwareModel hardwareModel;
+
         public abstract void Emulate();
         public abstract void Reset();
 
         public BaseEmulator()
+            : this(null)
         {
-            ClockFrequency = 3.3;
-            breakpoints = new Breakpoint[0x10000];
+        }
+        
+        public BaseEmulator(HardwareModel hardwareModel)
+        {
+            this.ClockFrequency = 3.3;
+            this.breakpoints = new Breakpoint[0x10000];
+            this.hardwareModel = hardwareModel;
         }
 
         public int TargetAddress
@@ -79,7 +82,6 @@ namespace Emulator
             }
         }
 
-        public event EventHandler<OnCpuStepEventArgs> OnCpuStep;
         public event EventHandler OnRunComplete;
         public event EventHandler<OnBreakpointHitEventArgs> OnBreakpointHit;
 
@@ -106,7 +108,7 @@ namespace Emulator
                                     while (!pauseRequest && registers.PC != targetAddress)
                                     {
                                         Emulate();
-                                        OnCpuStep?.Invoke(this, new OnCpuStepEventArgs { StateCounter = totalStates });
+                                        hardwareModel.AfterInstruction(totalStates);
                                         long actualStatesPerSecond = (totalStates - stateStart) * Stopwatch.Frequency / stopWatch.ElapsedTicks;
                                         if (actualStatesPerSecond > targetStatesPerSecond)
                                             spinWait.SpinOnce();    // Introduce a short delay keep up with the set ClockFrequency

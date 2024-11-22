@@ -14,6 +14,7 @@ namespace CPCAmstrad
             public int RowMask { get; set; }    // AY-3-8912 inputs - IO0..IO7 - bitmask
         }
         
+        // See keyboard diagram e.g. in CPC464 intern
         private Keys[,] matrix = new Keys[8, 10]
             {
                 { Keys.Up,        Keys.Left,    Keys.Delete,           Keys.Oemtilde,    Keys.D0,       Keys.D8,    Keys.D6, Keys.D4, Keys.D1,      Keys.None },
@@ -23,7 +24,7 @@ namespace CPCAmstrad
                 { Keys.NumPad6,   Keys.NumPad5, Keys.NumPad4,          Keys.Oemplus,     Keys.L,        Keys.H,     Keys.G,  Keys.S,  Keys.Tab,     Keys.None },
                 { Keys.NumPad3,   Keys.NumPad1, Keys.ShiftKey,         Keys.Oem1,        Keys.K,        Keys.J,     Keys.F,  Keys.D,  Keys.A,       Keys.None },
                 { Keys.Enter,     Keys.NumPad2, Keys.Oem5,             Keys.OemQuestion, Keys.M,        Keys.N,     Keys.B,  Keys.C,  Keys.Capital, Keys.None },
-                { Keys.Decimal,   Keys.NumPad0, Keys.ControlKey,       Keys.OemPeriod,   Keys.Oemcomma, Keys.Space, Keys.V,  Keys.X,  Keys.Z,       Keys.Delete }
+                { Keys.Decimal,   Keys.NumPad0, Keys.ControlKey,       Keys.OemPeriod,   Keys.Oemcomma, Keys.Space, Keys.V,  Keys.X,  Keys.Z,       Keys.Back }
             };
 
         // Inverse logic, up = bit set in byte

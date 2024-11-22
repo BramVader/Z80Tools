@@ -10,7 +10,7 @@ using Z80Core;
 
 namespace CPCAmstrad
 {
-    public class CPC464Model: HardwareModel
+    public class CPC464Model : HardwareModel
     {
         protected int upperRomBankNumber;
         protected long hsyncCounter;
@@ -51,7 +51,7 @@ namespace CPCAmstrad
             screenRam = memoryModel.Read(0xC000, 0x4000, false, false, true);
 
             // Create Z80 emulator
-            var emulator = new Z80Emulator
+            var emulator = new Z80Emulator(this)
             {
                 ClockFrequency = 4.0, // MHz
                 ReadMemory = memoryModel.ReadMemory,
@@ -59,7 +59,6 @@ namespace CPCAmstrad
                 ReadInput = ReadInput,
                 WriteOutput = WriteOutput
             };
-            emulator.OnCpuStep += OnCpuStep;
             emulator.OnInterruptAcknowledged += OnInterruptAcknowledged;
             this.emulator = emulator;
 
@@ -99,16 +98,17 @@ namespace CPCAmstrad
         }
 
         private bool lastHSync, lastVSync;
-        void OnCpuStep(object sender, BaseEmulator.OnCpuStepEventArgs e)
+
+        public override void AfterInstruction(long stateCounter)
         {
-            bool hSync = crtc6845.GetHSync(e.StateCounter);
-            bool vSync = crtc6845.GetVSync(e.StateCounter);
+            bool hSync = crtc6845.GetHSync(stateCounter);
+            bool vSync = crtc6845.GetVSync(stateCounter);
             // Detect falling edge of HSYNC
             if (!hSync && lastHSync)
             {
                 ((Z80Emulator)emulator).Interrupt = gateArray.HSyncFallingEdge(vSync);
             }
-            scope.RecordData(e.StateCounter, new object[] { hSync, vSync, (long)crtc6845.RamAddr(e.StateCounter) });
+            scope.RecordData(stateCounter, new object[] { hSync, vSync, (long)crtc6845.RamAddr(stateCounter) });
             lastHSync = hSync;
             lastVSync = vSync;
         }

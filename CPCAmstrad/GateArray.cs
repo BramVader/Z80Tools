@@ -86,6 +86,9 @@ namespace CPCAmstrad
 
         public void InterruptAcknowledged()
         {
+            // When the interrupt is acknowledged, this is sensed by the Gate-Array.
+            // The top bit (bit 5), of the counter is set to "0" and the interrupt request is cleared.
+            // This prevents the next interrupt from occuring closer than 32 HSYNCs time.
             interruptCounter &= 0x1F;
             interruptState = false;
         }

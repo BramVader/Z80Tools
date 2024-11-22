@@ -26,6 +26,12 @@ namespace Z80Core
         private readonly Z80Registers z80Registers;
 
         public Z80Emulator()
+            : base()
+        {
+        }
+
+        public Z80Emulator(HardwareModel hardwareModel)
+            : base(hardwareModel)
         {
             if (microCode == null)
             {

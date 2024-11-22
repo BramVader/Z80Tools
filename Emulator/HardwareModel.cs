@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Emulator;
-
-namespace Emulator
+﻿namespace Emulator
 {
     public abstract class HardwareModel
     {
@@ -15,7 +8,10 @@ namespace Emulator
 
         protected abstract byte ReadInput(int address);
         protected abstract void WriteOutput(int address, byte value);
+        
         public abstract void Reset();
+
+        public abstract void AfterInstruction(long stateCounter);
 
         public MemoryModel MemoryModel
         {

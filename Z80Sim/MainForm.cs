@@ -46,8 +46,8 @@ namespace Z80TestConsole
             };
 
             breakpoints = new List<Breakpoint>();
-            //(var model, var symbols) = LoadCpc464HardwareModel();
-            (var model, var symbols) = LoadBdosHardwareModel();
+            (var model, var symbols) = LoadCpc464HardwareModel();
+            //(var model, var symbols) = LoadBdosHardwareModel();
 
             memorySwitch = (bool[])model.MemorySwitch.Clone();
             lastEmulatorMemorySwitch = (bool[])model.MemorySwitch.Clone();
@@ -1044,7 +1044,7 @@ namespace Z80TestConsole
         private void Timer1_Tick(object sender, EventArgs e)
         {
             (model as CPCAmstrad.CPC464Model)?.CPCScreen?.Map();
-            UpdateAll();
+            //UpdateAll();
         }
 
         private void CheckBoxUpdateScreen_CheckedChanged(object sender, EventArgs e)

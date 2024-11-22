@@ -125,7 +125,7 @@ namespace CPCAmstrad
                                                         case 6: c = (value & 0x02) >> 1; break;
                                                         case 7: c = (value & 0x01) >> 0; break;
                                                     }
-                                                    Color v = gateArray.ColorToRgb(gateArray.Colors[value]);
+                                                    Color v = gateArray.ColorToRgb(gateArray.Colors[c]);
                                                     ((byte*)data.Scan0)[destAdr2] = v.B;
                                                     ((byte*)data.Scan0)[destAdr2 + 1] = v.G;
                                                     ((byte*)data.Scan0)[destAdr2 + 2] = v.R;
