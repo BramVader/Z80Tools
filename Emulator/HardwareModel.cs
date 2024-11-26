@@ -10,8 +10,9 @@
         protected abstract void WriteOutput(int address, byte value);
         
         public abstract void Reset();
-
+        public abstract void InterruptAcknowledged();
         public abstract void AfterInstruction(long stateCounter);
+        public abstract byte GetDataOnBus();
 
         public MemoryModel MemoryModel
         {

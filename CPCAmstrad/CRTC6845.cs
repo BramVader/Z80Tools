@@ -1,15 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-
-namespace CPCAmstrad
+﻿namespace CPCAmstrad
 {
     public class CRTC6845
     {
         private int[] registers = new int[18];
-        private double cpuClockFrequency;   // [MHz]
+        private double cpuClockFrequencyMHz;
         private long cpuStatesPerSecond;
 
         private long cpuStatesHSyncCycle;
@@ -85,12 +79,12 @@ namespace CPCAmstrad
             cpuStatesVSyncStop = (cpuStatesVSyncStart + syncWidthV * cpuStatesHSyncCycle) % cpuStatesVSyncCycle;
         }
 
-        public double CpuClockFrequency
+        public double CpuClockFrequencyMHz
         {
-            get { return cpuClockFrequency; }
+            get { return cpuClockFrequencyMHz; }
             set
             {
-                cpuClockFrequency = value;
+                cpuClockFrequencyMHz = value;
                 cpuStatesPerSecond = (long)(value * 1E6);
                 CalcSyncs();
             }

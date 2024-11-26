@@ -45,10 +45,10 @@ namespace Z80Core
             {"BC", "DE", "IX", "SP" },
             {"BC", "DE", "IY", "SP" }
         };
-        private readonly string[] cc = new string[] { "NZ", "Z", "NC", "C", "PO", "PE", "P", "M" };
-        private readonly string[] alu = new string[] { "ADD A,", "ADC A,", "SUB", "SBC A,", "AND", "XOR", "OR", "CP" };
-        private readonly string[] rot = new string[] { "RLC", "RRC", "RL", "RR", "SLA", "SRA", "SLL", "SRL" };
-        private readonly string[] im = new string[] { "0", "0", "1", "2", "0", "0", "1", "2" };
+        private readonly string[] cc = ["NZ", "Z", "NC", "C", "PO", "PE", "P", "M"];
+        private readonly string[] alu = ["ADD A,", "ADC A,", "SUB", "SBC A,", "AND", "XOR", "OR", "CP"];
+        private readonly string[] rot = ["RLC", "RRC", "RL", "RR", "SLA", "SRA", "SLL", "SRL"];
+        private readonly string[] im = ["0", "0", "1", "2", "0", "0", "1", "2"];
 
         // b = 0...3
         private readonly string[,] bli = new string[,] {
@@ -133,7 +133,7 @@ namespace Z80Core
                 }
                 else
                 {
-                    return "(" + nn() + ")";
+                    return $"({nn()})";
                 }
             }
             string port()
@@ -145,7 +145,7 @@ namespace Z80Core
                 }
                 else
                 {
-                    return "(" + n() + ")";
+                    return $"({n()})";
                 }
             }
             string r(int index)

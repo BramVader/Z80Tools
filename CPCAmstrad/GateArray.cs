@@ -1,4 +1,6 @@
 ﻿using Emulator;
+using System;
+using System.Diagnostics;
 using System.Drawing;
 
 namespace CPCAmstrad
@@ -52,7 +54,7 @@ namespace CPCAmstrad
         private int fnReg = 0;
         private int mode = 1;
         private int borderColor;
-        private int interruptCounter;
+        private int r52;
         private bool interruptState;
 
         public GateArray(MemoryModel memoryModel, bool[] memorySwitch)
@@ -79,6 +81,8 @@ namespace CPCAmstrad
             get { return mode; }
         }
 
+        public bool InterruptState => interruptState;
+
         public Color ColorToRgb(int color)
         {
             return colorPalette[color & 0x1F];
@@ -89,7 +93,7 @@ namespace CPCAmstrad
             // When the interrupt is acknowledged, this is sensed by the Gate-Array.
             // The top bit (bit 5), of the counter is set to "0" and the interrupt request is cleared.
             // This prevents the next interrupt from occuring closer than 32 HSYNCs time.
-            interruptCounter &= 0x1F;
+            r52 &= 0x1F;
             interruptState = false;
         }
 
@@ -101,15 +105,12 @@ namespace CPCAmstrad
                 hSyncCountAfterVSync++;
             else
                 hSyncCountAfterVSync = 0;
-            
-            interruptCounter = (interruptCounter + 1) % 52;
-            if (interruptCounter == 0 || (hSyncCountAfterVSync == 2 && interruptCounter < 32))
+
+            r52++;
+            if (r52 > 51 || (hSyncCountAfterVSync == 2 && r52 < 32))
             {
                 interruptState = true;
-            }
-            if (hSyncCountAfterVSync == 2 )
-            {
-                interruptCounter = 0;
+                r52 = 0;
             }
             return interruptState;
         }
@@ -145,7 +146,7 @@ namespace CPCAmstrad
                     // Reset HSYNC-counter
                     if ((value & 0x10) == 1)
                     {
-                        interruptCounter = 0;
+                        r52 = 0;
                     }
                     break;
 

@@ -129,5 +129,14 @@ namespace BdosCpm
         public override void AfterInstruction(long stateCounter)
         {
         }
+
+        public override void InterruptAcknowledged()
+        {
+        }
+
+        public override byte GetDataOnBus()
+        {
+            return 0xFF;
+        }
     }
 }

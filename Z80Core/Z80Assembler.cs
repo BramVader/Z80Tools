@@ -35,7 +35,7 @@ namespace Z80Core
         }
 
         /* (HL) -> null because it is mapped separately */
-        static readonly string[] regs = new[] { "B", "C", "D", "E", "H", "L", null /* (HL) */, "A" };
+        static readonly string[] regs = ["B", "C", "D", "E", "H", "L", null /* (HL) */, "A"];
 
         static readonly Dictionary<string, OperandType> operandTypeMap = new()
         {

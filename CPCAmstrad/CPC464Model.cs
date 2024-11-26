@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -59,7 +60,6 @@ namespace CPCAmstrad
                 ReadInput = ReadInput,
                 WriteOutput = WriteOutput
             };
-            emulator.OnInterruptAcknowledged += OnInterruptAcknowledged;
             this.emulator = emulator;
 
             // Set hardware settings
@@ -71,7 +71,7 @@ namespace CPCAmstrad
             crtc6845 = new CRTC6845();
             ay3_8912 = new AY3_8912();
 
-            crtc6845.CpuClockFrequency = emulator.ClockFrequency;
+            crtc6845.CpuClockFrequencyMHz = emulator.ClockFrequency;
             screen = new CPCScreen(this);
             keyboard = new Keyboard();
             printerPort = new PrinterPort();
@@ -92,11 +92,6 @@ namespace CPCAmstrad
             emulator.Reset();
         }
 
-        private void OnInterruptAcknowledged(object sender, EventArgs e)
-        {
-            gateArray.InterruptAcknowledged();
-        }
-
         private bool lastHSync, lastVSync;
 
         public override void AfterInstruction(long stateCounter)
@@ -104,13 +99,26 @@ namespace CPCAmstrad
             bool hSync = crtc6845.GetHSync(stateCounter);
             bool vSync = crtc6845.GetVSync(stateCounter);
             // Detect falling edge of HSYNC
+
             if (!hSync && lastHSync)
             {
-                ((Z80Emulator)emulator).Interrupt = gateArray.HSyncFallingEdge(vSync);
+                gateArray.HSyncFallingEdge(vSync);
             }
-            scope.RecordData(stateCounter, new object[] { hSync, vSync, (long)crtc6845.RamAddr(stateCounter) });
+            ((Z80Emulator)emulator).Interrupt = gateArray.InterruptState;
+            scope.RecordData(stateCounter, [hSync, vSync, (long)crtc6845.RamAddr(stateCounter)]);
             lastHSync = hSync;
             lastVSync = vSync;
+        }
+
+        public override void InterruptAcknowledged()
+        {
+            gateArray.InterruptAcknowledged();
+        }
+
+        // Can be used to return an interrupt vector in interrupt mode IM0/IM2
+        public override byte GetDataOnBus()
+        {
+            return 0xFF;
         }
 
         public PIO8255 PIO8255

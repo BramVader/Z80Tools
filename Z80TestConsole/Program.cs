@@ -143,7 +143,7 @@ namespace Z80TestConsole
 
         }
 
-        public static void TestEmulator()
+        public static void ListExpressions()
         {
             var memory = new byte[0x10000];
             var decompiler = new Z80Disassembler(true);
@@ -235,8 +235,8 @@ namespace Z80TestConsole
                         if (line.Operands == line2.Operands)
                             continue;
                     }
-                    var expr = emulator.GetExpression(memory);
-                    if (expr != null && line != null && !String.IsNullOrEmpty(line.Mnemonic))
+                    var expressions = emulator.GetExpressions(memory);
+                    if (expressions != null && line != null && !String.IsNullOrEmpty(line.Mnemonic))
                     {
                         var sb = new StringBuilder("<tr><td>");
                         for (int k = 0; k < line.Opcodes.Length; k++)
@@ -255,7 +255,10 @@ namespace Z80TestConsole
                             sb.Append(line.Operands);
                         }
                         sb.Append("</td><td>");
-                        sb.Append(expr.Evaluate(null, true));
+                        foreach (var (arr, expr) in expressions)
+                        {
+                            sb.Append(arr).Append(": ").Append(expr.Evaluate(null, true)).Append("<br/><br/>");
+                        }
                         sb.Append("</td></tr>");
                         writer.WriteLine(sb.ToString());
                     }
@@ -264,7 +267,134 @@ namespace Z80TestConsole
             writer.WriteLine("</table></body>");
         }
 
-        private static async Task TestInstruction()
+        private static async Task Test8bitAluInstructions()
+        {
+            var ass = @"
+incr EQU +2
+
+LD SP, stack
+LD A, 00
+LD B,A
+LD C,A
+PUSH BC
+POP AF
+LD IX, stack
+RL (IX-incr)
+HALT
+DS 10
+stack:
+";
+            var asm = new Z80Assembler();
+            var dism = new Z80Disassembler();
+            var coll = new Assembler.OutputCollector(Console.Out);
+            await asm.Assemble(coll, new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(ass))));
+
+            // Setup emulator
+            var emu = new Z80Emulator();
+            emu.Debugger = Console.Out;
+            var memory = coll.Segments.First().Memory;
+            emu.ReadMemory = a => memory[a];
+            emu.WriteMemory = (a, b) => memory[a] = b;
+            var reg = emu.GetRegisters<Z80Registers>();
+
+            for (int n = 0; n < 256; n++)
+            {
+                emu.Reset();
+
+                memory[0x4] = (byte)n;
+                while (!reg.Halted)
+                    emu.Emulate();
+
+                Console.WriteLine($"{n:000}({n:X2}) SZYHXPNC");
+                Console.WriteLine($"{reg.A:000}({reg.A:X2}) {Convert.ToString(reg.F, 2).PadLeft(8, '0')}");
+                Console.WriteLine("----");
+            }
+        }
+
+        private static async Task TestCpiCpd()
+        {
+            var ass = @"
+LD A, 22h
+LD BC, 5
+LD HL, table
+CPIR
+HALT
+table: DB 11h
+DB 22h
+DB 33h
+DB 44h
+DB 55h
+";
+            var asm = new Z80Assembler();
+            var coll = new Assembler.OutputCollector(Console.Out);
+            await asm.Assemble(coll, new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(ass))));
+
+            // Setup my emulator
+            var emu = new Z80Emulator();
+            var memory = coll.Segments.First().Memory;
+            var reg = emu.GetRegisters<Z80Registers>();
+            emu.ReadMemory = adr => memory[adr];
+
+            for (int n = 0; n < 256; n++)
+            {
+                emu.Reset();
+
+                // Overwrite LD A operand
+                memory[1] = (byte)n;
+                // Execute instructions
+                while (!reg.Halted)
+                    emu.Emulate();
+
+                Console.WriteLine($"{n}({n:X2}) SZYHXPNC");
+                Console.WriteLine($"{reg.A}({reg.A:X2}) {Convert.ToString(reg.F, 2).PadLeft(8, '0')} BC: {reg.BC} HL: {reg.HL}");
+                Console.WriteLine("----");
+            }
+        }
+
+        private static async Task TestBit()
+        {
+            var ass = @"
+LD HL, buf
+LD A, 0
+BIT 0,A
+HALT
+buf: db 00
+";
+            var asm = new Z80Assembler();
+            var dism = new Z80Disassembler();
+            var coll = new Assembler.OutputCollector(Console.Out);
+            await asm.Assemble(coll, new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(ass))));
+
+            // Setup my emulator
+            var emu = new Z80Emulator();
+            emu.Debugger = Console.Out;
+            var memory = coll.Segments.First().Memory;
+            var reg = emu.GetRegisters<Z80Registers>();
+            emu.ReadMemory = adr => memory[adr];
+
+            for (int n = 0; n < 256; n++)
+            {
+                for (int m = 0x40; m <= 0x7F; m++)
+                {
+                    int opcode = m;
+                    emu.Reset();
+
+                    memory[0x4] = (byte)n;
+                    memory[0x8] = (byte)n;
+                    memory[0x6] = (byte)opcode;
+                    while (!reg.Halted)
+                        emu.Emulate();
+
+                    var instruction = dism.Disassemble(adr => memory[adr], 2);
+                    Console.WriteLine($"{n:000}({n:X2}) SZYHXPNC {String.Join(" ", instruction.Opcodes.Select(it => it.ToString("X2")))} {instruction.Mnemonic} {instruction.Operands}");
+                    Console.WriteLine($"{reg.A:000}({reg.A:X2}) {Convert.ToString(reg.F, 2).PadLeft(8, '0')}");
+                    Console.WriteLine("----");
+                }
+            }
+        }
+
+
+        private static async Task Test16bitAluInstructions()
         {
             var ass = @"
 LD HL, 1234
@@ -304,6 +434,7 @@ ADD HL,BC
         }
 
 
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
@@ -311,8 +442,10 @@ ADD HL,BC
         static async Task Main()
         {
             //CreateMatrix();
-            //TestEmulator();
-            await TestInstruction();
+            ListExpressions();
+            //await Test8bitAluInstructions();
+            //await TestCpiCpd();
+            //await TestBit();
             //TestRom();
         }
     }

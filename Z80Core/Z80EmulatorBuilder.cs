@@ -86,7 +86,6 @@ namespace Z80Core
         private Action<Z80Emulator, int>[] microCodeDDCB, microCodeFDCB;
         private Expression[] microExpr, microExprCB, microExprDD, microExprED, microExprFD, microExprDDCB, microExprFDCB;
         private Expression handleIntExpr, handleNmiExpr;
-        private Action<Z80Emulator, byte> handleInt, handleNmi;
         private Timing[] timing, timingCB, timingDD, timingED, timingFD, timingDDCB, timingFDCB;
         private ParameterExpression par;
         private Func<Expression, Expression> readByte, readInput;
@@ -291,7 +290,6 @@ namespace Z80Core
             BuildRotateAndBit();
             BuildInputOutput();
             BuildLoopInstuctions();
-            BuildInterrupts();
             BuildMisc();
             BuildCBxx(microExprCB);
             BuildCBxx(microExprDDCB, regIX, dispPar);
@@ -339,7 +337,7 @@ namespace Z80Core
                     microExprDD[0xCB] = Expression.Block(
                         new[] { dispPar },
                         Expression.Assign(dispPar, readImmediateByte), // read "d" as in (IX+d) or (IY+d)
-                        Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeDDCB"), readImmediateByte), par, dispPar)
+                        Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, nameof(Z80Emulator.microCodeDDCB)), readImmediateByte), par, dispPar)
                     );
                 }
                 else
@@ -364,7 +362,7 @@ namespace Z80Core
                     microExprFD[0xCB] = Expression.Block(
                         new[] { dispPar },
                         Expression.Assign(dispPar, readImmediateByte),
-                        Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeFDCB"), readImmediateByte), par, dispPar)
+                        Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, nameof(Z80Emulator.microCodeFDCB)), readImmediateByte), par, dispPar)
                     );
                 }
                 else
@@ -374,10 +372,10 @@ namespace Z80Core
                 microCodeFD[opcode] = Compile(microExprFD[opcode]);
             }
 
-            microExpr[0xCB] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeCB"), readImmediateByte), par);
-            microExpr[0xDD] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeDD"), readImmediateByte), par);
-            microExpr[0xED] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeED"), readImmediateByte), par);
-            microExpr[0xFD] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, "microCodeFD"), readImmediateByte), par);
+            microExpr[0xCB] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, nameof(Z80Emulator.microCodeCB)), readImmediateByte), par);
+            microExpr[0xDD] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, nameof(Z80Emulator.microCodeDD)), readImmediateByte), par);
+            microExpr[0xED] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, nameof(Z80Emulator.microCodeED)), readImmediateByte), par);
+            microExpr[0xFD] = Expression.Invoke(Expression.ArrayAccess(GetMember<Z80Emulator>(par, nameof(Z80Emulator.microCodeFD)), readImmediateByte), par);
 
             // Compile basic expressions
             for (int n = 0; n < 256; n++)
@@ -404,8 +402,6 @@ namespace Z80Core
             var member = typeof(TElement).GetMember(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
             return Expression.MakeMemberAccess(instance, member[0]);
         }
-
-
 
         private void InitTiming()
         {
@@ -448,6 +444,7 @@ namespace Z80Core
                 timingFDCB[n].StatesNormal = n < 0x40 || n >= 0x80 ? 23 : 20;
             }
         }
+
 
         private void Init()
         {
@@ -649,7 +646,7 @@ namespace Z80Core
             }
 
             getParity = (p) =>
-                Expression.ArrayAccess(Expression.Field(par, typeof(Z80Emulator).GetField("parityTable", BindingFlags.NonPublic | BindingFlags.Instance)), Expression.And(p, c(0xFF)));
+                Expression.ArrayAccess(Expression.Field(par, typeof(Z80Emulator).GetField(nameof(Z80Emulator.parityTable), BindingFlags.NonPublic | BindingFlags.Instance)), Expression.And(p, c(0xFF)));
 
             Expression<Action> textwriterWriteObjectFinder = () => default(TextWriter).Write("", (object)null);
 
@@ -924,7 +921,7 @@ namespace Z80Core
                         Expression.Assign(flagX2, bit(temp2, 5)),
                         Expression.Assign(flagZ, isZero(temp2)),
                         Expression.Assign(flagHC, bit(
-                            incDec == 0 
+                            incDec == 0
                             ? Expression.Increment(Expression.And(temp1, c(0x0F)))
                             : Expression.Decrement(Expression.And(temp1, c(0x0F))),
                             4
@@ -1766,9 +1763,12 @@ namespace Z80Core
             // EI
             var maskInterruptsNextProp = GetMember<Z80Registers>(regs, p => p.MaskInterruptsNext);
             microExpr[0xFB] = Expression.Block(
+                Expression.IfThen(
+                    Expression.Not(iff1),                               // Only delay the masking of next interrupt when IFF1 was false
+                    Expression.Assign(maskInterruptsNextProp, c(true))  // Interrupts are masked after execution of EI
+                ),
                 Expression.Assign(iff1, c(true)),
-                Expression.Assign(iff2, c(true)),
-                Expression.Assign(maskInterruptsNextProp, c(true))  // Interrupts are masked after execution of EI
+                Expression.Assign(iff2, c(true))
             );
 
             // IM0
@@ -2102,65 +2102,6 @@ namespace Z80Core
             }
         }
 
-        private void BuildInterrupts()
-        {
-            var dataOnBusPar = Expression.Parameter(typeof(byte), "dataOnBus");
-            var timingProp = GetMember<Z80Registers>(regs, p => p.Timing);
-            var haltedProp = GetMember<Z80Registers>(regs, p => p.Halted);
-            var nextOpcodeProp = GetMember<Z80Registers>(regs, p => p.NextOpcode);
-            var statesNormalProp = Expression.Property(timingProp, "StatesNormal");
-            var statesLowProp = Expression.Property(timingProp, "StatesLow");
-            handleIntExpr =
-                Expression.Block(
-                    new[] { dataOnBusPar },
-                    Expression.Assign(regR, Expression.Increment(regR)),
-                    Expression.IfThen(haltedProp, Expression.Block(
-                        Expression.Assign(regPC, Expression.Increment(regPC)),   // Bail out of HALT instruction
-                        Expression.Assign(haltedProp, c(false))
-                    )),
-                    Expression.Assign(iff1, c(false)),
-                    Expression.Assign(iff2, c(false)),
-                    Expression.IfThenElse(Expression.Equal(im, c(0)),
-                        Expression.Block(       // Interrupt modus 0 - read next opcode from databus
-                            Expression.Assign(nextOpcodeProp, Expression.Convert(dataOnBusPar, typeof(int?))),
-                            Expression.Assign(statesNormalProp, c(13)),
-                            Expression.Assign(statesLowProp, c(13))
-                        ),
-                        Expression.IfThenElse(Expression.Equal(im, c(1)),
-                            Expression.Block(       // Interrupt modus 1 - next opcode is a RST 0x0038
-                                Expression.Assign(nextOpcodeProp, Expression.Convert(c(0xFF), typeof(int?))),   // RST 0x0038
-                                Expression.Assign(statesNormalProp, c(13)),
-                                Expression.Assign(statesLowProp, c(13))
-                            ),
-                            Expression.Block(       // Interrupt modus 2
-                                push(regPC),
-                                Expression.Assign(nextOpcodeProp, Expression.Convert(readByte(Expression.Or(Expression.LeftShift(regI, c(8)), cInt(dataOnBusPar))), typeof(int?))),
-                                Expression.Assign(statesNormalProp, c(19)),
-                                Expression.Assign(statesLowProp, c(19))
-                            )
-                        )
-                    )
-                );
-            handleInt = Expression.Lambda<Action<Z80Emulator, byte>>(handleIntExpr, par, dataOnBusPar).Compile();
-
-            handleNmiExpr =
-                Expression.Block(
-                    new[] { dataOnBusPar },
-                    Expression.Assign(regR, Expression.Increment(regR)),
-                    Expression.IfThen(haltedProp, Expression.Block(
-                        Expression.Assign(regPC, Expression.Increment(regPC)),   // Bail out of HALT instruction
-                        Expression.Assign(haltedProp, c(false))
-                    )),
-                    Expression.Assign(iff2, iff1),
-                    Expression.Assign(iff1, c(false)),
-                    push(regPC),
-                    Expression.Assign(regPC, c(0x0066)),
-                    Expression.Assign(statesNormalProp, c(11)),
-                    Expression.Assign(statesLowProp, c(11))
-                );
-            handleNmi = Expression.Lambda<Action<Z80Emulator, byte>>(handleNmiExpr, par, dataOnBusPar).Compile();
-        }
-
         #region Microcode
 
         public Action<Z80Emulator>[] MicroCode
@@ -2196,16 +2137,6 @@ namespace Z80Core
         public Action<Z80Emulator, int>[] MicroCodeFDCB
         {
             get { return microCodeFDCB; }
-        }
-
-        public Action<Z80Emulator, byte> HandleInt
-        {
-            get { return handleInt; }
-        }
-
-        public Action<Z80Emulator, byte> HandleNmi
-        {
-            get { return handleNmi; }
         }
 
         public bool[] ParityTable
