@@ -10,6 +10,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
+using Z80Sim;
 
 namespace Z80TestConsole
 {
@@ -46,12 +47,12 @@ namespace Z80TestConsole
             };
 
             breakpoints = new List<Breakpoint>();
-            (var model, var symbols) = LoadCpc464HardwareModel();
-            //(var model, var symbols) = LoadBdosHardwareModel();
+            var model = LoadCpc464HardwareModel();
+            //var model = LoadBdosHardwareModel();
+            var symbols = model.GetSymbols();
 
             memorySwitch = (bool[])model.MemorySwitch.Clone();
             lastEmulatorMemorySwitch = (bool[])model.MemorySwitch.Clone();
-            //InitRam();
 
             model.Emulator.GetRegisters<Z80Core.Z80Registers>().CloneTo(lastRegisters);
             model.Emulator.OnRunComplete += (sender, args) =>
@@ -82,34 +83,20 @@ namespace Z80TestConsole
             UpdateMemoryCheckboxList(memorySwitch);
 
             stackListBox.SelectedAddress = 0;
+            checkBoxUpdateScreen.Checked = true;
         }
 
         private Z80Core.Z80Registers Registers =>
             model.Emulator.GetRegisters<Z80Core.Z80Registers>();
 
-        private (HardwareModel, Symbols) LoadCpc464HardwareModel()
+        private HardwareModel LoadCpc464HardwareModel()
         {
-            return (new CPCAmstrad.CPC464Model(), Symbols.Load("Jumptable.txt"));
+            return new CPCAmstrad.CPC464Model();
         }
 
-        private (HardwareModel, Symbols) LoadBdosHardwareModel()
+        private HardwareModel LoadBdosHardwareModel()
         {
-            var model = new BdosModel(System.Console.Out);
-            return (model, model.Symbols);
-        }
-
-        private void InitRam()
-        {
-            model.MemoryModel.Write(
-
-            new byte[]
-            { 0xA7,
-
-              0x3E, 0xF0,
-              0x47,
-              0xCB, 0xD0
-
-            }, 0, model.MemoryModel.Descriptors.GetEnabled(model.MemoryModel.Descriptors["RAM"]));
+            return new BdosModel(System.Console.Out);
         }
 
         private void UpdateMemoryCheckboxList(bool[] enabled)
@@ -255,7 +242,6 @@ namespace Z80TestConsole
         /// the next instruction.
         /// </summary>
         /// <param name="address"></param>
-        /// <param name="bank"></param>
         /// <param name="correctUp"></param>
         /// <returns></returns>
         private int CorrectAddress(int address, bool correctUp)
@@ -1012,6 +998,15 @@ namespace Z80TestConsole
             }
         }
 
+        private void FindReferences_Click(object sender, EventArgs e)
+        {
+            var referencesForm = new ReferencesForm();
+            referencesForm.ShowDialog();
+            foreach (var mem in model.MemoryModel.Descriptors)
+            {
+            }
+        }
+
         private void GotoMemoryAddressItem_Click(object sender, EventArgs e)
         {
             var inputbox = new InputBox("Goto Address", "Address")
@@ -1230,6 +1225,5 @@ namespace Z80TestConsole
                 thisTextBox.SelectAll();
             }
         }
-
     }
 }

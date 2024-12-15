@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CPCAmstrad;
+using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -82,28 +83,34 @@ namespace Z80TestConsole
 
         public static void Decompile(byte[] memory, ushort address, int length)
         {
-            var decompiler = new Z80Disassembler();
+            var model = new CPC464Model();
+            var symbols = model.GetSymbols();
+            var decompiler = new Z80Disassembler(false, symbols);
             ushort adr1 = address;
             using var sw = new StreamWriter("LOWER.LST");
             while (adr1 < address + length)
             {
-                var line = decompiler.Disassemble(a => memory[a], adr1);
-                if (line != null)
+                var assemblyLine = decompiler.Disassemble(adr => memory[adr], adr1);
+                if (assemblyLine != null)
                 {
-                    sw.Write(adr1.ToString("X4"));
-                    sw.Write("\t");
-                    foreach (byte opcode in line.Opcodes)
+                    if (!String.IsNullOrEmpty(assemblyLine.Name))
                     {
-                        sw.Write(opcode.ToString("X2"));
+                        sw.Write("; ");
+                        sw.WriteLine(assemblyLine.Name);
                     }
-                    for (int n = 0; n < Math.Max(1, 4 - line.Opcodes.Length); n++)
-                        sw.Write("\t");
-                    sw.Write(line.Mnemonic);
-                    if (line.Mnemonic.Length < 3)
-                        sw.Write("\t");
-                    sw.Write("\t");
-                    sw.WriteLine(line.Operands);
-                    adr1 += (ushort)line.Opcodes.Length;
+                    if (!String.IsNullOrEmpty(assemblyLine.Comment))
+                    {
+                        sw.Write("; ");
+                        sw.WriteLine(assemblyLine.Comment);
+                    }
+                    string[] strings = new[] {
+                    assemblyLine.Address.ToString("X4"),        // Address
+                    String.Join("", assemblyLine.Opcodes.Select(op => op.ToString("X2"))),  // Opcodes
+                    assemblyLine.Mnemonic, // Mnemonics
+                    assemblyLine.Operands, // Operands
+                };
+                    sw.WriteLine($"    {strings[0]:X4} {strings[1],-10} {strings[2],-10} {strings[3]}");
+                    adr1 += (ushort)assemblyLine.Opcodes.Length;
                 }
                 else
                     adr1++;
@@ -446,7 +453,7 @@ ADD HL,BC
             //await Test8bitAluInstructions();
             //await TestCpiCpd();
             //await TestBit();
-            //TestRom();
+            TestRom();
         }
     }
 }

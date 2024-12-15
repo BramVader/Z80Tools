@@ -60,9 +60,17 @@ namespace Disassembler
 
         public static Symbols Load(string filename)
         {
+            using var fs = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return Load(fs);
+        }
+
+        public static Symbols Load(Stream stream)
+        {
             var list = new Symbols();
-            foreach (string st in File.ReadAllLines(filename))
+            using var reader = new StreamReader(stream);
+            while (!reader.EndOfStream)
             {
+                string st = reader.ReadLine();
                 string line = st.Replace('\t', ' ').Trim();
                 if (line.Length > 0)
                 {
@@ -78,7 +86,7 @@ namespace Disassembler
                             var symbol = new Symbol
                             {
                                 Value = Convert.ToInt32(line.Substring(0, index1), 16),
-                                Name = line[(index1 + 1) .. (index2 - 1)].Trim()
+                                Name = line[(index1 + 1)..index2].Trim()
                             };
                             if (index2 < line.Length)
                                 symbol.Comment = line[(index2 + 1)..].Trim();

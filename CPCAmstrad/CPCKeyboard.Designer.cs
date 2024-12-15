@@ -1,6 +1,6 @@
 ﻿namespace CPCAmstrad
 {
-    partial class CPCScreen
+    partial class CPCKeyboard
     {
         /// <summary>
         /// Required designer variable.
@@ -30,19 +30,18 @@
         {
             SuspendLayout();
             // 
-            // CPCScreen
+            // CPCKeyboard
             // 
-            AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
+            AutoScaleDimensions = new System.Drawing.SizeF(7F, 16F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            ClientSize = new System.Drawing.Size(568, 382);
-            Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
-            Name = "CPCScreen";
-            Text = "CPCScreen";
-            Paint += CPCScreen_Paint;
-            KeyDown += CPCScreen_KeyDown;
-            KeyUp += CPCScreen_KeyUp;
-            PreviewKeyDown += CPCScreen_PreviewKeyDown;
+            BackColor = System.Drawing.Color.FromArgb(34, 34, 34);
+            ClientSize = new System.Drawing.Size(1180, 535);
+            Font = new System.Drawing.Font("Cascadia Code", 9F);
+            FormBorderStyle = System.Windows.Forms.FormBorderStyle.Fixed3D;
+            Name = "CPCKeyboard";
+            Text = "Form1";
             ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion

@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using Disassembler;
+using Emulator;
+using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using Emulator;
 using Z80Core;
 
 namespace CPCAmstrad
@@ -15,22 +12,20 @@ namespace CPCAmstrad
     {
         protected int upperRomBankNumber;
         protected long hsyncCounter;
-        
+
         // Hardware devices
-        protected PIO8255 pio8255;
-        protected CRTC6845 crtc6845;
-        protected CPCScreen screen;
-        protected Keyboard keyboard;
-        protected PrinterPort printerPort;
-        protected GateArray gateArray;
-        protected AY3_8912 ay3_8912;
-        protected Scope scope;
+        protected readonly PIO8255 pio8255;
+        protected readonly CRTC6845 crtc6845;
+        protected readonly CPCScreen screen;
+        protected readonly CPCKeyboard keyboard;
+        protected readonly PrinterPort printerPort;
+        protected readonly GateArray gateArray;
+        protected readonly AY3_8912 ay3_8912;
+        protected readonly Scope scope;
 
         // Hardware Settings
-        protected VideoSystem videoSystem;
-        protected CompanyName companyname;
-
-        protected byte[] screenRam;
+        protected readonly VideoSystem videoSystem;
+        protected readonly CompanyName companyname;
 
         public CPC464Model()
         {
@@ -48,8 +43,6 @@ namespace CPCAmstrad
 
             memoryModel.Write(LoadRom("LOWER.ROM"), 0x0000, true, false, false);
             memoryModel.Write(LoadRom("UPPER.ROM"), 0xC000, false, true, false);
-
-            screenRam = memoryModel.Read(0xC000, 0x4000, false, false, true);
 
             // Create Z80 emulator
             var emulator = new Z80Emulator(this)
@@ -73,7 +66,7 @@ namespace CPCAmstrad
 
             crtc6845.CpuClockFrequencyMHz = emulator.ClockFrequency;
             screen = new CPCScreen(this);
-            keyboard = new Keyboard();
+            keyboard = new CPCKeyboard();
             printerPort = new PrinterPort();
             gateArray = new GateArray(memoryModel, memorySwitch);
             scope = new Scope();
@@ -82,7 +75,8 @@ namespace CPCAmstrad
             scope.AddIntChannel("RamAddr", -1, 64 * 312);
 
             screen.Show();
-            scope.Show();
+            keyboard.Show();
+            //scope.Show();
         }
 
         public override void Reset()
@@ -136,7 +130,7 @@ namespace CPCAmstrad
             get { return screen; }
         }
 
-        public Keyboard Keyboard
+        public CPCKeyboard Keyboard
         {
             get { return keyboard; }
         }
@@ -159,7 +153,7 @@ namespace CPCAmstrad
         private static byte[] LoadRom(string name)
         {
             var assembly = Assembly.GetExecutingAssembly();
-            string fullName = assembly.GetManifestResourceNames().Where(nm => nm.Contains(name)).FirstOrDefault();
+            string fullName = assembly.GetManifestResourceNames().FirstOrDefault(nm => nm.Contains(name));
             if (!String.IsNullOrEmpty(fullName))
             {
                 var resourceStream = assembly.GetManifestResourceStream(fullName);
@@ -231,6 +225,17 @@ namespace CPCAmstrad
                         break;
                 }
             }
+        }
+
+        public override Symbols GetSymbols()
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            string fullName = assembly.GetManifestResourceNames().FirstOrDefault(nm => nm.Contains("Jumptable.txt"));
+            if (!String.IsNullOrEmpty(fullName))
+            {
+                return Symbols.Load(assembly.GetManifestResourceStream(fullName));
+            }
+            return null;
         }
     }
 }
