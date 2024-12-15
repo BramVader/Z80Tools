@@ -1,4 +1,6 @@
-﻿namespace Emulator
+﻿using Disassembler;
+
+namespace Emulator
 {
     public abstract class HardwareModel
     {
@@ -28,5 +30,7 @@
         {
             get { return memorySwitch; }
         }
+
+        public abstract Symbols GetSymbols();
     }
 }

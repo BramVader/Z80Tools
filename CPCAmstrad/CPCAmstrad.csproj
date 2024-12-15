@@ -1,22 +1,38 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<UseWindowsForms>true</UseWindowsForms>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="..\CPC464 ROMS\LOWER.ROM" Link="CPC464 ROMS\LOWER.ROM" />
-    <EmbeddedResource Include="..\CPC464 ROMS\UPPER.ROM" Link="CPC464 ROMS\UPPER.ROM" />
-  </ItemGroup>
+	<ItemGroup>
+		<EmbeddedResource Include="..\CPC464 ROMS\LOWER.ROM" Link="CPC464 ROMS\LOWER.ROM" />
+		<EmbeddedResource Include="..\CPC464 ROMS\UPPER.ROM" Link="CPC464 ROMS\UPPER.ROM" />
+		<EmbeddedResource Include="..\CPC464 ROMS\Jumptable.txt" Link="Jumptable.txt" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Emulator\Emulator.csproj" />
-    <ProjectReference Include="..\Z80Core\Z80Core.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Emulator\Emulator.csproj" />
+		<ProjectReference Include="..\Z80Core\Z80Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Update="Properties\Resources.Designer.cs">
+	    <DesignTime>True</DesignTime>
+	    <AutoGen>True</AutoGen>
+	    <DependentUpon>Resources.resx</DependentUpon>
+	  </Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <EmbeddedResource Update="Properties\Resources.resx">
+	    <Generator>ResXFileCodeGenerator</Generator>
+	    <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+	  </EmbeddedResource>
+	</ItemGroup>
 
 </Project>

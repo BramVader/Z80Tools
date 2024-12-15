@@ -1,18 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ApplicationIcon />
     <OutputType>Exe</OutputType>
     <StartupObject />
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\CPC464 ROMS\LOWER.ROM" Link="CPC464 ROMS\LOWER.ROM" />
-    <None Include="..\CPC464 ROMS\UPPER.ROM" Link="CPC464 ROMS\UPPER.ROM" />
+    <EmbeddedResource Include="..\CPC464 ROMS\LOWER.ROM" Link="CPC464 ROMS\LOWER.ROM" />
+    <EmbeddedResource Include="..\CPC464 ROMS\UPPER.ROM" Link="CPC464 ROMS\UPPER.ROM" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CPCAmstrad\CPCAmstrad.csproj" />
     <ProjectReference Include="..\Z80Core\Z80Core.csproj" />
   </ItemGroup>
 

@@ -1,4 +1,5 @@
-﻿using Emulator;
+﻿using Disassembler;
+using Emulator;
 using System;
 using System.IO;
 using System.Text;
@@ -137,6 +138,11 @@ namespace BdosCpm
         public override byte GetDataOnBus()
         {
             return 0xFF;
+        }
+
+        public override Symbols GetSymbols()
+        {
+            return null;
         }
     }
 }
