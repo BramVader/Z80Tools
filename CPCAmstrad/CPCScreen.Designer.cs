@@ -38,7 +38,6 @@
             Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             Name = "CPCScreen";
             Text = "CPCScreen";
-            Paint += CPCScreen_Paint;
             KeyDown += CPCScreen_KeyDown;
             KeyUp += CPCScreen_KeyUp;
             PreviewKeyDown += CPCScreen_PreviewKeyDown;

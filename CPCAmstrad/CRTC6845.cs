@@ -1,11 +1,21 @@
 ﻿using System;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Runtime.InteropServices;
 
 namespace CPCAmstrad
 {
     public class CRTC6845
     {
+        private class ScreenBuffer
+        {
+            public int[] Buffer;
+            public int Width;
+            public int Height;
+        }
+
         private static readonly string[] regNames = [
             /* 00 */ nameof(HorizontalTotal),
             /* 01 */ nameof(HorizontalDisplayed),
@@ -22,8 +32,8 @@ namespace CPCAmstrad
             /* 12 */ nameof(DisplayStartAddressHigh),
             /* 13 */ nameof(DisplayStartAddressLow),
             /* 14 */ nameof(CursorAddressHigh),
-            /* 15 */ nameof(CursorAddressLow),
             /* 16 */ nameof(LightPenAddressHigh),
+            /* 15 */ nameof(CursorAddressLow),
             /* 17 */ nameof(LightPenAddressLow)
         ];
 
@@ -44,20 +54,32 @@ namespace CPCAmstrad
                 ).Compile()
             ).ToArray();
 
-        private double cpuClockFrequencyMHz;
-        private long cpuStatesPerSecond;
+        private CPC464Model hardwareModel;
 
-        private long cpuStatesHSyncCycle;
-        private long cpuStatesHSyncStart;
-        private long cpuStatesHSyncStop;
+        private long counter = 0L;
+        private int c0 = 0;     // Horizontal char counter (0..63, where 0..39 is chars, the rest is border)
+        private int c3l = 0;    // Horizontal sync counter
+        private int c3h = 0;    // Vertical sync counter
+        private int c4 = 0;     // Vertical char counter (0..38, where 0..24 is chars, the rest is border)
+        private int c5 = 0;     // Total adjust counter (extra scanlines)
+        private int c9 = 0;     // Raster line counter (0..7)
+        private bool verticalTotalAdjusting = false;    // In adjust mode: rendering VerticalTotalAdjust scanlines
+        private int monWidth = 0;
+        private int monHeight = 0;
+        private bool hsync = false;
+        private bool vsync = false;
+        private int divider = 0;
+        private bool newFrame = true;
 
-        private long cpuStatesVSyncCycle;
-        private long cpuStatesVSyncStart;
-        private long cpuStatesVSyncStop;
+        private object lck = new object();
 
-        private int totalwidth, totalheight;
-        private int width, height;
-        private int rasterLines;
+        private ScreenBuffer screenBuffer = new();
+        private ScreenBuffer viewBuffer = new();
+
+        public CRTC6845(CPC464Model hardwareModel)
+        {
+            this.hardwareModel = hardwareModel;
+        }
 
         // 00: Width of the screen, in characters. Should always be 63 (64 characters). 1 character == 1μs.
         public int HorizontalTotal { get; set; } = 63;
@@ -116,7 +138,7 @@ namespace CPCAmstrad
 
 
         public int RegisterSelect { get; set; }
-        
+
         public int RegisterValue
         {
             get
@@ -128,98 +150,167 @@ namespace CPCAmstrad
             set
             {
                 if (RegisterSelect >= 0 && RegisterSelect < 18)
-                    setters[RegisterSelect](this,value);
-                HandleSetting();
+                    setters[RegisterSelect](this, value);
             }
         }
 
-        public void CalcSyncs()
+        private Bitmap screenBitmap = null;
+
+        public Bitmap GetScreenBitmap()
         {
-            /* Commented values are when CRTC is loaded with default values */
-
-            long syncWidthH = HorizontalAndVerticalSyncWidths & 0xF;    // 14
-            if (syncWidthH == 0) syncWidthH = 16;
-            long syncWidthV = HorizontalAndVerticalSyncWidths >> 4;     // 8
-            if (syncWidthV == 0) syncWidthV = 16;
-
-            totalwidth = (HorizontalTotal + 1) * 16;    // 1024
-            width = (HorizontalDisplayed) * 16;         // 640
-            rasterLines = (MaximumRasterAddress & 0x07) + 1;    // 8
-
-            cpuStatesHSyncCycle = (HorizontalTotal + 1) * cpuStatesPerSecond / (long)1E6;   // 256
-            cpuStatesHSyncStart = HorizontalSyncPosition * cpuStatesPerSecond / (long)1E6;  // 184
-            cpuStatesHSyncStop = (syncWidthH * cpuStatesPerSecond / (long)1E6 + cpuStatesHSyncStart) % cpuStatesHSyncCycle;     // 240
-
-            totalheight = ((VerticalTotal & 0x7F) + 1) * rasterLines + (VerticalTotalAdjust & 0x1F);    // 312
-            height = (VerticalDisplayed & 0x7F) * rasterLines;      // 200
-            cpuStatesVSyncCycle = totalheight * cpuStatesHSyncCycle;        // 79872
-            cpuStatesVSyncStart = (VerticalSyncPosition & 0x7F) * ((MaximumRasterAddress & 0x07) + 1) * cpuStatesHSyncCycle;    // 61440
-            cpuStatesVSyncStop = (cpuStatesVSyncStart + syncWidthV * cpuStatesHSyncCycle) % cpuStatesVSyncCycle;    // 63488
-        }
-
-        public double CpuClockFrequencyMHz
-        {
-            get { return cpuClockFrequencyMHz; }
-            set
+            lock (lck)
             {
-                cpuClockFrequencyMHz = value;
-                cpuStatesPerSecond = (long)(value * 1E6);
-                CalcSyncs();
+                if (viewBuffer.Buffer == null)
+                    return null;
+                if (screenBitmap == null || screenBitmap.Width != viewBuffer.Width || screenBitmap.Height != viewBuffer.Height)
+                {
+                    screenBitmap = new Bitmap(viewBuffer.Width, viewBuffer.Height, PixelFormat.Format32bppArgb);
+                }
+                var data = screenBitmap.LockBits(new Rectangle(0, 0, viewBuffer.Width, viewBuffer.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
+                Marshal.Copy(viewBuffer.Buffer, 0, data.Scan0, viewBuffer.Buffer.Length);
+                screenBitmap.UnlockBits(data);
+            }
+            return screenBitmap;
+        }
+
+        // :15:14|13:12:11|10: 9: 8: 7: 6: 5: 4: 3: 2: 1| 0|
+        // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+        // | MA  |   RA   |              MA             | X|
+        // |13:12| 2: 1: 0| 9: 8: 7: 6: 5: 4: 3: 2: 1: 0| 0|
+        //
+        // CRTC wiring: MA0..MA9 (char address 0..40x25) connected to A1..A10
+        //              RA0..R2  (char generator 0..7) connected to A11..A13
+        //            MA12..MA13 (memory page/bank) connected to A14..A15
+        //
+        // CRTC scans the screen (CRT) in horizontal lines, top to bottom and it includes
+        // the non-display area (border). Each horizontal line has the width of 64 chars
+        // (=64µs -> HorizontalTotal|r0) of which 40 chars (HorizontalDisplayed|r1) are
+        // visible. During the scanning of one line, c0 [0..63] increments 64 times followed by
+        // an increment of c9 [0..7].
+        // This repeats until c9 exceeds 7 (MaximumRasterAddress|r9) (one line of text rendered).
+        // Both counters c0 and c9 are reset and the line counter c4 [0..38] is incremented.
+        // The whole process is repeated until c4 exceeds 38 (VerticalTotal|r4) .
+        // After that, extra scanlines are rendered, depending on VerticalTotalAdjust|r5. When 0
+        // or 16, no extra scanlines are rendered.
+        // 
+        // Memory offset "ma" is the value of r12/r13, initialized at the start of the frame and has
+        // default value of 0x3000 and increments with 40, everytime there is a vertical scroll.
+        // Since bit 4 and 5 of r12 (e.g. bit 12 and 13 of ma) are connected to A14/A15, this means a
+        // memory offset of 0xC000.
+        //
+        // Calculation of address:
+        //    MA0..MA9 = ma + c0 + c4 * (HorizontalTotal|r0 + 1)
+        //    RA0..RA2 = c9
+        // 
+        // Since the CRTC addresses also the non-display area, the address runs from ma to ma+64x39 = 0xC000..0xC9C0
+        // and since only the lower 10 bits are used, this means 0x0000..0x1C0 and never exceeds 0x3FF.
+        // Also memory during the non-display area is addressed but rendered as 'border' by the Gate Array.
+        // Adjusting HorizontalDisplayed / VerticalDisplayed can display these areas as well.
+
+        public void Simulate(long stateCounter)
+        {
+            while (counter < stateCounter)
+            {
+                divider = (divider + 1) % 4; // Divide frequency by 4
+                if (divider == 0)
+                {
+                    // The CRTC internal adress counter
+                    int ma = ((DisplayStartAddressHigh << 8) | DisplayStartAddressLow) + c0 + c4 * HorizontalDisplayed;
+                    // The video RAM address, see comment above
+                    int vma = ((ma & 0x3000) << 2) |     // 0000, 4000, 8000 or C000
+                        ((c9 & 0x07) << 11) |            // rasterline 0..7
+                        ((ma & 0x3FF) << 1);             // char address 
+
+                    int scanline = c4 * (MaximumRasterAddress + 1) + c9;
+                    bool dispen = c0 < HorizontalDisplayed && c4 < VerticalDisplayed;
+
+                    int width = (HorizontalTotal + 1) * 16;
+                    int height = (VerticalTotal + 1) * (MaximumRasterAddress + 1);
+
+                    if (newFrame)  // Init frame
+                    {
+                        lock (lck)
+                        {
+                            // Swap buffers
+                            (viewBuffer, screenBuffer) = (screenBuffer, viewBuffer);
+                            if (screenBuffer.Buffer == null || screenBuffer.Width != width || screenBuffer.Height != height)
+                            {
+                                screenBuffer.Buffer = new int[width * height];
+                                screenBuffer.Width = width;
+                                screenBuffer.Height = height;
+                            }
+                        }
+                    }
+
+                    int offsx = ((HorizontalTotal + 1) - (HorizontalSyncPosition + 2)) / 2;
+                    int offsy = 6 * (MaximumRasterAddress + 1);
+
+                    var gateArray = hardwareModel.GateArray;
+                    int x = ((c0 + offsx) % (HorizontalTotal + 1)) * 16;
+                    int y = (scanline + offsy) % height;
+                    int addr = y * width + x;
+
+                    // Calculate syncs
+                    hsync =
+                        c0 >= HorizontalSyncPosition && // r2: default 46
+                        c0 < HorizontalSyncPosition + (HorizontalAndVerticalSyncWidths & 0x0F);  // r3l: default 14
+
+                    // Note: Certain CRTC's do not support setting r3h and will be initialized as 0
+                    // However, a value of 0 is interpreted as 16
+                    int vscanWidth = HorizontalAndVerticalSyncWidths >> 4;  // r3h: default 8
+                    if (vscanWidth == 0) vscanWidth = 16;
+                    int vscanStart = VerticalSyncPosition * (MaximumRasterAddress + 1);
+                    int vscanEnd = vscanStart + vscanWidth;
+                    vsync = scanline >= vscanStart && scanline < vscanEnd;
+
+                    // Rendering 16 pixels/2 bytes (always 16, regardsless of mode)
+                    bool[] ramEnabled = new[] { false, false, true };
+                    int value = dispen ? hardwareModel.MemoryModel.Read(vma++, ramEnabled) : -1;
+                    gateArray.Render(value, screenBuffer.Buffer, addr);
+                    value = dispen ? hardwareModel.MemoryModel.Read(vma++, ramEnabled) : -1;
+                    gateArray.Render(value, screenBuffer.Buffer, addr + 8);
+
+                    // Increment counters
+                    newFrame = false;
+                    c0 = (c0 + 1) % (HorizontalTotal + 1);  // r0: default 63
+                    if (c0 == 0)
+                    {
+                        if (!verticalTotalAdjusting)
+                        {
+                            // Raster line counter
+                            c9 = (c9 + 1) % (MaximumRasterAddress + 1);     // r9: default 7
+                            if (c9 == 0)
+                            {
+                                // Vertical counter
+                                c4 = (c4 + 1) % (VerticalTotal + 1); // r4: default 38
+                                if (c4 == 0)
+                                {
+                                    verticalTotalAdjusting = true;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (c5 == VerticalTotalAdjust) // r5: default 0
+                            {
+                                c5 = 0;     // Reset adjust counter
+                                verticalTotalAdjusting = false;
+                                newFrame = true;
+                            }
+                            else
+                            {
+                                c5++;
+                            }
+                        }
+                    }
+
+                }
+                counter++;
             }
         }
 
-        public bool GetHSync(long stateCounter)
-        {
-            long count = stateCounter % cpuStatesHSyncCycle;
-            return cpuStatesHSyncStop > cpuStatesHSyncStart ?
-                count >= cpuStatesHSyncStart && count < cpuStatesHSyncStop :
-                count >= cpuStatesHSyncStart || count < cpuStatesHSyncStop;
-        }
+        public bool HSync => hsync;
 
-        public bool GetVSync(long stateCounter)
-        {
-            long count = stateCounter % cpuStatesVSyncCycle;
-            return cpuStatesVSyncStop > cpuStatesVSyncStart ?
-                count >= cpuStatesVSyncStart && count < cpuStatesVSyncStop :
-                count >= cpuStatesVSyncStart || count < cpuStatesVSyncStop;
-        }
-
-        // Returns -1 when DISPTMG is 1.
-        public int RamAddr(long stateCounter)
-        {
-            int x = (int)((stateCounter % cpuStatesHSyncCycle) * (long)1E6 / cpuStatesPerSecond);
-            int y = (int)((stateCounter % cpuStatesVSyncCycle) / cpuStatesHSyncCycle);
-            if (x > HorizontalDisplayed) return -1;
-            if (y > height) return -1;
-            return x + y * HorizontalDisplayed;
-        }
-
-        public int VideoPage
-        {
-            get { return videoPage; }
-        }
-
-        public int VideoSize
-        {
-            get { return videoSize; }
-        }
-
-        public int VideoOffset
-        {
-            get { return videoOffset; }
-        }
-
-        protected int videoPage = 0xC000;
-        protected int videoSize = 0x4000;
-        protected int videoOffset = 0x0000;
-
-        private void HandleSetting()
-        {
-            videoPage = (DisplayStartAddressHigh & 0x30) << 10;     // 0xC000
-            videoSize = (DisplayStartAddressHigh & 0x0C) == 0x0C ? 0x8000 : 0x4000;     // 0x4000
-            videoOffset = ((DisplayStartAddressHigh << 8) | DisplayStartAddressLow) & 0x03FF;   // 0x00 / 0x28 / 0x50 ... (incrementing with 40 every vertical scrolling)
-            Console.WriteLine($"R12|R13: {DisplayStartAddressHigh:X2}{DisplayStartAddressLow:X2} videoPage: {videoPage:X4} videoOffset: {videoOffset:X4}");
-            CalcSyncs();
-        }
+        public bool VSync => vsync;
     }
 }

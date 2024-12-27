@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 
 namespace CPCAmstrad
 {
@@ -11,41 +12,41 @@ namespace CPCAmstrad
         private readonly int urom;
         private readonly int ram;
 
-        private readonly Color[] colorPalette = new[] 
-        {
-            Color.FromArgb(0x6E7D6B),
-            Color.FromArgb(0x6E7B6D),
-            Color.FromArgb(0x00F36B),
-            Color.FromArgb(0xF3F36D),
-            Color.FromArgb(0x00026B),
-            Color.FromArgb(0xF00268),
-            Color.FromArgb(0x007868),
-            Color.FromArgb(0xF37D6B),
-            Color.FromArgb(0xF30268),
-            Color.FromArgb(0xF3F36B),
-            Color.FromArgb(0xF3F30D),
-            Color.FromArgb(0xFFF3F9),
-            Color.FromArgb(0xF30506),
-            Color.FromArgb(0xF302F4),
-            Color.FromArgb(0xF37D0D),
-            Color.FromArgb(0xFA80F9),
-            Color.FromArgb(0x000268),
-            Color.FromArgb(0x02F36B),
-            Color.FromArgb(0x02F001),
-            Color.FromArgb(0x0FF3F2),
-            Color.FromArgb(0x000201),
-            Color.FromArgb(0x0C02F4),
-            Color.FromArgb(0x027801),
-            Color.FromArgb(0x0C7BF4),
-            Color.FromArgb(0x690268),
-            Color.FromArgb(0x71F36B),
-            Color.FromArgb(0x71F504),
-            Color.FromArgb(0x71F3F4),
-            Color.FromArgb(0x6C0201),
-            Color.FromArgb(0x6C02F2),
-            Color.FromArgb(0x6E7B01),
-            Color.FromArgb(0x6E7BF6)
-        };
+        private readonly int[] colorPalette =
+        [
+            0x6E7D6B,
+            0x6E7B6D,
+            0x00F36B,
+            0xF3F36D,
+            0x00026B,
+            0xF00268,
+            0x007868,
+            0xF37D6B,
+            0xF30268,
+            0xF3F36B,
+            0xF3F30D,
+            0xFFF3F9,
+            0xF30506,
+            0xF302F4,
+            0xF37D0D,
+            0xFA80F9,
+            0x000268,
+            0x02F36B,
+            0x02F001,
+            0x0FF3F2,
+            0x000201,
+            0x0C02F4,
+            0x027801,
+            0x0C7BF4,
+            0x690268,
+            0x71F36B,
+            0x71F504,
+            0x71F3F4,
+            0x6C0201,
+            0x6C02F2,
+            0x6E7B01,
+            0x6E7BF6
+        ];
 
         private readonly int[] colors = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
         private readonly MemoryModel memoryModel;
@@ -56,6 +57,9 @@ namespace CPCAmstrad
         private int borderColor;
         private int r52;
         private bool interruptState;
+        private RenderDlg[] renders;
+        
+        public RenderDlg Render { get; private set; }
 
         public GateArray(MemoryModel memoryModel, bool[] memorySwitch)
         {
@@ -64,6 +68,8 @@ namespace CPCAmstrad
             ram = 2;
             this.memoryModel = memoryModel;
             this.memorySwitch = memorySwitch;
+            this.renders = [RenderMode0, RenderMode1, RenderMode2];
+            Render = RenderMode1;
         }
 
         public int[] Colors
@@ -83,7 +89,7 @@ namespace CPCAmstrad
 
         public bool InterruptState => interruptState;
 
-        public Color ColorToRgb(int color)
+        public int ColorToRgb(int color)
         {
             return colorPalette[color & 0x1F];
         }
@@ -98,7 +104,7 @@ namespace CPCAmstrad
         }
 
         private int hSyncCountAfterVSync;
-        
+
         public bool HSyncFallingEdge(bool vSync)
         {
             if (vSync)
@@ -114,6 +120,73 @@ namespace CPCAmstrad
             }
             return interruptState;
         }
+
+        public static int[][] mode0BitMasks =
+            [
+                Enumerable.Range(0, 256).Select(value => ((value & 0x80) >> 7) | ((value & 0x08) >> 2) | ((value & 0x20) >> 3) | ((value & 0x02) << 2)).ToArray(),
+                Enumerable.Range(0, 256).Select(value => ((value & 0x40) >> 6) | ((value & 0x04) >> 1) | ((value & 0x10) >> 2) | ((value & 0x01) << 3)).ToArray()
+            ];
+        public static int[][] mode1BitMasks =
+            [
+                Enumerable.Range(0, 256).Select(value => ((value & 0x80) >> 7) | ((value & 0x08) >> 2)).ToArray(),
+                Enumerable.Range(0, 256).Select(value => ((value & 0x40) >> 6) | ((value & 0x04) >> 1)).ToArray(),
+                Enumerable.Range(0, 256).Select(value => ((value & 0x20) >> 5) | ((value & 0x02) >> 0)).ToArray(),
+                Enumerable.Range(0, 256).Select(value => ((value & 0x10) >> 4) | ((value & 0x01) << 1)).ToArray()
+            ];
+        public static int[][] mode2BitMasks =
+            [
+                Enumerable.Range(0, 256).Select(value => (value & 0x80) >> 7).ToArray(),
+                Enumerable.Range(0, 256).Select(value => (value & 0x40) >> 6).ToArray(),
+                Enumerable.Range(0, 256).Select(value => (value & 0x20) >> 5).ToArray(),
+                Enumerable.Range(0, 256).Select(value => (value & 0x10) >> 4).ToArray(),
+                Enumerable.Range(0, 256).Select(value => (value & 0x08) >> 3).ToArray(),
+                Enumerable.Range(0, 256).Select(value => (value & 0x04) >> 2).ToArray(),
+                Enumerable.Range(0, 256).Select(value => (value & 0x02) >> 1).ToArray(),
+                Enumerable.Range(0, 256).Select(value => (value & 0x01) >> 0).ToArray()
+            ];
+
+        public void RenderMode0(int value, int[] buffer, int addr)
+        {
+            // One byte = 2 pixels in Mode 0 => 8 pixels on result
+            for (int n = 0; n < 2; n++)
+            {
+                int v = value < 0
+                    ? colorPalette[BorderColor & 0x1F]
+                    : colorPalette[Colors[mode0BitMasks[n][value]] & 0x1F];
+                buffer[addr++] = v;
+                buffer[addr++] = v;
+                buffer[addr++] = v;
+                buffer[addr++] = v;
+            }
+        }
+
+        public void RenderMode1(int value, int[] buffer, int addr)
+        {
+            // One byte = 4 pixels in Mode 1 => 8 pixels on result
+            for (int n = 0; n < 4; n++)
+            {
+                int v = value < 0
+                    ? colorPalette[BorderColor & 0x1F]
+                    : colorPalette[Colors[mode1BitMasks[n][value]] & 0x1F];
+                buffer[addr++] = v;
+                buffer[addr++] = v;
+            }
+        }
+
+        public void RenderMode2(int value, int[] buffer, int addr)
+        {
+            // One byte = 8 pixels in Mode 2 => 8 pixels on result
+            for (int n = 0; n < 8; n++)
+            {
+                int v = value < 0
+                    ? colorPalette[BorderColor & 0x1F]
+                    : colorPalette[Colors[mode2BitMasks[n][value]] & 0x1F];
+                buffer[addr++] = v;
+            }
+        }
+
+        public delegate void RenderDlg(int value, int[] buffer, int addr);
+
 
         public void Write(byte value)
         {
@@ -135,6 +208,7 @@ namespace CPCAmstrad
 
                 case 2:         // Write to MF-Reg
                     mode = (value & 0x03) % 3;
+                    Render = renders[mode];
                     bool lromEnable = (value & 0x04) == 0;
                     bool uromEnable = (value & 0x08) == 0;
                     if (memorySwitch[lrom] != lromEnable || memorySwitch[urom] != uromEnable)

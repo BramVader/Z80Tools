@@ -61,10 +61,9 @@ namespace CPCAmstrad
 
             // Create hardware devices
             pio8255 = new PIO8255();
-            crtc6845 = new CRTC6845();
+            crtc6845 = new CRTC6845(this);
             ay3_8912 = new AY3_8912();
 
-            crtc6845.CpuClockFrequencyMHz = emulator.ClockFrequency;
             screen = new CPCScreen(this);
             keyboard = new CPCKeyboard();
             printerPort = new PrinterPort();
@@ -90,8 +89,9 @@ namespace CPCAmstrad
 
         public override void AfterInstruction(long stateCounter)
         {
-            bool hSync = crtc6845.GetHSync(stateCounter);
-            bool vSync = crtc6845.GetVSync(stateCounter);
+            crtc6845.Simulate(stateCounter);
+            bool hSync = crtc6845.HSync;
+            bool vSync = crtc6845.VSync;
             // Detect falling edge of HSYNC
 
             if (!hSync && lastHSync)
@@ -99,7 +99,6 @@ namespace CPCAmstrad
                 gateArray.HSyncFallingEdge(vSync);
             }
             ((Z80Emulator)emulator).Interrupt = gateArray.InterruptState;
-            scope.RecordData(stateCounter, [hSync, vSync, (long)crtc6845.RamAddr(stateCounter)]);
             lastHSync = hSync;
             lastVSync = vSync;
         }
