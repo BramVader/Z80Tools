@@ -38,7 +38,7 @@ namespace CPCAmstrad
                 AddressSpace = 0x10000 // 64KiB
             };
 
-            memorySwitch = new bool[] { true, true, true };     // All enabled
+            memorySwitch = [true, true, true];     // All enabled
             memoryModel.SwitchMemory(memorySwitch);
 
             memoryModel.Write(LoadRom("LOWER.ROM"), 0x0000, true, false, false);
@@ -61,13 +61,13 @@ namespace CPCAmstrad
 
             // Create hardware devices
             pio8255 = new PIO8255();
-            crtc6845 = new CRTC6845(this);
             ay3_8912 = new AY3_8912();
 
             screen = new CPCScreen(this);
             keyboard = new CPCKeyboard();
             printerPort = new PrinterPort();
             gateArray = new GateArray(memoryModel, memorySwitch);
+            crtc6845 = new CRTC6845(this);
             scope = new Scope();
             scope.AddBitChannel("HSync");
             scope.AddBitChannel("VSync");
@@ -80,7 +80,7 @@ namespace CPCAmstrad
 
         public override void Reset()
         {
-            memorySwitch = new bool[] { true, true, true };     // All enabled
+            memorySwitch = [true, true, true];     // All enabled
             memoryModel.SwitchMemory(memorySwitch);
             emulator.Reset();
         }

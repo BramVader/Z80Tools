@@ -36,6 +36,7 @@ namespace Z80TestConsole
             stackListBox = new VirtualListbox();
             contextMenuAssembly = new System.Windows.Forms.ContextMenuStrip(components);
             gotoAssemblyAddressItem = new System.Windows.Forms.ToolStripMenuItem();
+            assemblyFindReferences = new System.Windows.Forms.ToolStripMenuItem();
             stackAddressScroller = new System.Windows.Forms.VScrollBar();
             groupBoxRegisters = new System.Windows.Forms.GroupBox();
             panel1 = new System.Windows.Forms.Panel();
@@ -157,11 +158,8 @@ namespace Z80TestConsole
             stepOverButton = new System.Windows.Forms.ToolStripButton();
             groupBoxMemorySelect = new System.Windows.Forms.GroupBox();
             memoryCheckedBox = new System.Windows.Forms.CheckedListBox();
-            checkBoxUpdateScreen = new System.Windows.Forms.CheckBox();
-            timer1 = new System.Windows.Forms.Timer(components);
             MainPanel = new System.Windows.Forms.Panel();
             splitter1 = new System.Windows.Forms.Splitter();
-            assemblyFindReferences = new System.Windows.Forms.ToolStripMenuItem();
             groupBoxStack.SuspendLayout();
             contextMenuAssembly.SuspendLayout();
             groupBoxRegisters.SuspendLayout();
@@ -213,7 +211,7 @@ namespace Z80TestConsole
             contextMenuAssembly.ImageScalingSize = new System.Drawing.Size(20, 20);
             contextMenuAssembly.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { gotoAssemblyAddressItem, assemblyFindReferences });
             contextMenuAssembly.Name = "contextMenuAssembly";
-            contextMenuAssembly.Size = new System.Drawing.Size(197, 70);
+            contextMenuAssembly.Size = new System.Drawing.Size(197, 48);
             // 
             // gotoAssemblyAddressItem
             // 
@@ -222,6 +220,13 @@ namespace Z80TestConsole
             gotoAssemblyAddressItem.Size = new System.Drawing.Size(196, 22);
             gotoAssemblyAddressItem.Text = "Goto Address...";
             gotoAssemblyAddressItem.Click += GotoAddressItem_Click;
+            // 
+            // assemblyFindReferences
+            // 
+            assemblyFindReferences.Name = "assemblyFindReferences";
+            assemblyFindReferences.Size = new System.Drawing.Size(196, 22);
+            assemblyFindReferences.Text = "Find References...";
+            assemblyFindReferences.Click += FindReferences_Click;
             // 
             // stackAddressScroller
             // 
@@ -1617,23 +1622,6 @@ namespace Z80TestConsole
             memoryCheckedBox.TabIndex = 0;
             memoryCheckedBox.ItemCheck += MemoryCheckBox_ItemCheck;
             // 
-            // checkBoxUpdateScreen
-            // 
-            checkBoxUpdateScreen.AutoSize = true;
-            checkBoxUpdateScreen.Location = new System.Drawing.Point(312, 37);
-            checkBoxUpdateScreen.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
-            checkBoxUpdateScreen.Name = "checkBoxUpdateScreen";
-            checkBoxUpdateScreen.Size = new System.Drawing.Size(102, 19);
-            checkBoxUpdateScreen.TabIndex = 8;
-            checkBoxUpdateScreen.Text = "Update Screen";
-            checkBoxUpdateScreen.UseVisualStyleBackColor = true;
-            checkBoxUpdateScreen.CheckedChanged += CheckBoxUpdateScreen_CheckedChanged;
-            // 
-            // timer1
-            // 
-            timer1.Interval = 20;
-            timer1.Tick += Timer1_Tick;
-            // 
             // MainPanel
             // 
             MainPanel.Controls.Add(groupBoxDisassembly);
@@ -1655,21 +1643,12 @@ namespace Z80TestConsole
             splitter1.TabIndex = 10;
             splitter1.TabStop = false;
             // 
-            // assemblyFindReferences
-            // 
-            assemblyFindReferences.Name = "assemblyFindReferences";
-            assemblyFindReferences.Size = new System.Drawing.Size(196, 22);
-            assemblyFindReferences.Text = "Find References...";
-            assemblyFindReferences.Click += FindReferences_Click;
-
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             ClientSize = new System.Drawing.Size(1002, 705);
             Controls.Add(splitter1);
-            Controls.Add(checkBoxUpdateScreen);
             Controls.Add(MainPanel);
             Controls.Add(groupBoxMemory);
             Controls.Add(toolStrip1);
@@ -1825,8 +1804,6 @@ namespace Z80TestConsole
         private System.Windows.Forms.ToolStripMenuItem gotoAssemblyAddressItem;
         private System.Windows.Forms.ContextMenuStrip contextMenuMemory;
         private System.Windows.Forms.ToolStripMenuItem gotoMemoryAddressItem;
-        private System.Windows.Forms.CheckBox checkBoxUpdateScreen;
-        private System.Windows.Forms.Timer timer1;
         private VirtualListbox stackListBox;
         private System.Windows.Forms.VScrollBar stackAddressScroller;
         private System.Windows.Forms.Panel MainPanel;

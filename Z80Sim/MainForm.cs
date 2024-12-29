@@ -83,7 +83,6 @@ namespace Z80TestConsole
             UpdateMemoryCheckboxList(memorySwitch);
 
             stackListBox.SelectedAddress = 0;
-            checkBoxUpdateScreen.Checked = true;
         }
 
         private Z80Core.Z80Registers Registers =>
@@ -1034,17 +1033,6 @@ namespace Z80TestConsole
                 }
                 else ok = true;
             }
-        }
-
-        private void Timer1_Tick(object sender, EventArgs e)
-        {
-            (model as CPCAmstrad.CPC464Model)?.CPCScreen?.Map();
-            //UpdateAll();
-        }
-
-        private void CheckBoxUpdateScreen_CheckedChanged(object sender, EventArgs e)
-        {
-            timer1.Enabled = checkBoxUpdateScreen.Checked;
         }
 
         private void RequestStackPage(object sender, VirtualListbox.RequestPageEventArgs e)

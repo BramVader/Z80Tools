@@ -14,22 +14,23 @@ namespace CPCAmstrad
             InitializeComponent();
         }
 
-        public void Map()
+        public void InvokeRender(Bitmap bitmap)
         {
-            if (!Disposing)
+            if (InvokeRequired)
+                Invoke(() => Map(bitmap));
+            else
+                Map(bitmap);
+        }
+
+        public void Map(Bitmap bitmap)
+        {
+            if (firstFrame)
             {
-                var crtc = hardwareModel.CRTC6845;
-                using var g = Graphics.FromHwnd(this.Handle);
-                var bitmap = crtc.GetScreenBitmap();
-                if (bitmap != null)
-                {
-                    if (firstFrame)
-                    {
-                        ClientSize = new Size(bitmap.Width, bitmap.Height * 2);
-                    }
-                    g.DrawImage(bitmap, 0, 0, bitmap.Width, bitmap.Height * 2);
-                }
+                ClientSize = new Size(bitmap.Width, bitmap.Height * 2);
+                firstFrame = false;
             }
+            using var g = Graphics.FromHwnd(this.Handle);
+            g.DrawImage(bitmap, 0, 0, bitmap.Width, bitmap.Height * 2);
         }
 
         private void CPCScreen_KeyDown(object sender, KeyEventArgs e)
